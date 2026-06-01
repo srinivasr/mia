@@ -1,0 +1,29 @@
+{
+  "productName": "mia_n_mia",
+  "version": "0.1.0",
+  "identifier": "com.mianmia.dev",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "mia_n_mia",
+        "fullscreen": true,
+        "transparent": false,
+        "decorations": false,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}
