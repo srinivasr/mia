@@ -1,0 +1,63 @@
+:root {
+    /* Sleek Modern Dark Theme */
+    --bg: #0f0f12;
+    --panel: rgba(22, 22, 28, 0.7);
+    --panel2: rgba(30, 30, 38, 0.8);
+    --border: rgba(120, 120, 150, 0.15);
+    --border-b: rgba(150, 150, 200, 0.3);
+    --border-a: rgba(180, 140, 255, 0.5);
+    --pri: #b185ff;
+    --pri-dim: #6c4ca8;
+    --pri-gho: #291c47;
+    --acc: #ff4785;
+    --acc2: #ffb84d;
+    --green: #4ade80;
+    --green-d: #16a34a;
+    --red: #fb7185;
+    --muted-c: #8e8e9c;
+    --text: #f4f4f5;
+    --text-dim: #a1a1aa;
+    --text-med: #d4d4d8;
+    --white: #ffffff;
+    --dark: #000000;
+    --bar-bg: rgba(15, 15, 18, 0.9);
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--bg) !important;
+    background-image: none !important;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: var(--text);
+}
+
+#app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: transparent;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.titlebar {
+    height: 30px;
+    background: transparent;
+    user-select: none;
+    display: flex;
+    justify-content: flex-end;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
