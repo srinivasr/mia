@@ -15,11 +15,11 @@
   let showDevices = false;
 
   const suggestions = [
-    { text: "What can you do?",               special: null },
-    { text: "Tell me about yourself",          special: null },
-    { text: "Check my system",                 special: null },
-    { text: "Open my projects",                special: null },
-    { text: "What's going on in the world?",   special: "world_monitor" },
+    "What can you do?",
+    "Tell me about yourself",
+    "Check my system",
+    "Open my projects",
+    "What's going on in the world?",
   ];
 
   afterUpdate(() => {
@@ -91,13 +91,8 @@
 
   <div class="suggestions-row">
     {#each suggestions as s}
-      <button class="suggestion-chip" on:click={() => {
-        handleSend(s.text);
-        if (s.special === "world_monitor" && ws && ws.readyState === WebSocket.OPEN) {
-          setTimeout(() => ws.send(JSON.stringify({ type: "world_monitor" })), 8000);
-        }
-      }}>
-        {s.text}
+      <button class="suggestion-chip" on:click={() => handleSend(s)}>
+        {s}
       </button>
     {/each}
   </div>
@@ -249,8 +244,8 @@
 
   .suggestions-row {
     display: flex;
-    gap: 6px;
-    padding: 4px 12px 0;
+    gap: 8px;
+    padding: 6px 12px 4px;
     overflow-x: auto;
     flex-shrink: 0;
     scrollbar-width: none;
@@ -262,22 +257,25 @@
 
   .suggestion-chip {
     flex-shrink: 0;
-    padding: 3px 10px;
-    border-radius: 10px;
-    font-size: 0.6rem;
+    padding: 6px 14px;
+    border-radius: 14px;
+    font-size: 0.75rem;
+    font-weight: 500;
     font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
-    background: #111;
-    color: #444;
-    border: 1px solid #1a1a1a;
+    background: #1a1a2a;
+    color: #99aabb;
+    border: 1px solid #2a2a3a;
     cursor: pointer;
     white-space: nowrap;
     transition: all 0.15s;
+    letter-spacing: 0.3px;
   }
 
   .suggestion-chip:hover {
-    color: #888;
-    border-color: #555;
-    background: #181818;
+    color: #c8d8e8;
+    border-color: var(--pri);
+    background: #1e1e32;
+    box-shadow: 0 0 12px rgba(74, 229, 255, 0.08);
   }
 
   .term-input-row {
