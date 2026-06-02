@@ -53,7 +53,10 @@ LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE          = 512
+# Smaller send chunk → less buffering before each API packet (16ms at 16kHz)
+SEND_CHUNK_SIZE     = 256
+# Smaller recv chunk → hardware buffer stays thin → faster playback start (21ms at 24kHz)
+RECV_CHUNK_SIZE     = 512
 
 from memory.config_manager import get_gemini_key
 
@@ -71,12 +74,6 @@ def _load_system_prompt() -> str:
             "Never simulate or guess results — always call the appropriate tool."
         )
 
-_CTRL_RE = re.compile(r"<ctrl\d+>", re.IGNORECASE)
-
-def _clean_transcript(text: str) -> str:    
-    text = _CTRL_RE.sub("", text)
-    text = re.sub(r"[\x00-\x08\x0b-\x1f]", "", text)
-    return text.strip()
 
 TOOL_DECLARATIONS = [
     {
@@ -506,6 +503,7 @@ class MiaLive:
         self._speaking_lock = threading.Lock()
         self.ui.on_text_command = self._on_text_command
         self._turn_done_event: asyncio.Event | None = None
+        self._introduced = False
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
@@ -568,7 +566,6 @@ class MiaLive:
             input_audio_transcription={},
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": TOOL_DECLARATIONS}],
-            session_resumption=types.SessionResumptionConfig(),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -740,7 +737,7 @@ class MiaLive:
                 samplerate=SEND_SAMPLE_RATE,
                 channels=CHANNELS,
                 dtype="int16",
-                blocksize=CHUNK_SIZE,
+                blocksize=SEND_CHUNK_SIZE,
                 callback=callback,
             ):
                 logger.info(f"Mic stream open")
@@ -811,16 +808,18 @@ class MiaLive:
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",
-            blocksize=CHUNK_SIZE,
+            blocksize=RECV_CHUNK_SIZE,
         )
         stream.start()
+
+        loop = asyncio.get_event_loop()
 
         try:
             while True:
                 try:
                     chunk = await asyncio.wait_for(
                         self.audio_in_queue.get(),
-                        timeout=0.05
+                        timeout=0.02
                     )
                 except asyncio.TimeoutError:
                     if (
@@ -832,7 +831,7 @@ class MiaLive:
                         self._turn_done_event.clear()
                     continue
                 self.set_speaking(True)
-                stream.write(chunk)
+                await loop.run_in_executor(None, stream.write, chunk)
         except Exception as e:
             logger.info(f"Play: {e}")
             raise
@@ -850,7 +849,7 @@ class MiaLive:
         while True:
             try:
                 logger.info(f"Connecting...")
-                self.ui.set_state("THINKING")
+                self.ui.set_state("INITIALIZING")
                 config = self._build_config()
 
                 async with (
@@ -860,7 +859,8 @@ class MiaLive:
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
                     self.audio_in_queue = asyncio.Queue()
-                    self.out_queue      = asyncio.Queue(maxsize=10)
+                    # Larger send queue avoids silent drops under mic burst traffic
+                    self.out_queue      = asyncio.Queue(maxsize=50)
                     self._turn_done_event = asyncio.Event()
 
                     logger.info(f"Connected.")
@@ -871,6 +871,12 @@ class MiaLive:
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
+
+                    if not self._introduced:
+                        self._introduced = True
+                        # Small delay so audio pipeline is fully ready before speaking
+                        await asyncio.sleep(0.5)
+                        self.speak("System Initialization Complete. Please briefly introduce yourself to the user and ask how you can help.")
 
             except Exception as e:
                 logger.exception("Exception occurred")

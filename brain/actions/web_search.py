@@ -1,35 +1,20 @@
-import os
 #web_search.py
-import json
-import sys
-from pathlib import Path
-
+from memory.config_manager import get_gemini_key
 from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return os.environ.get("GEMINI_API_KEY")
-
-
-_CLIENT = None
+_CLIENT     = None
+_CLIENT_KEY = None
 
 def _get_client():
-    global _CLIENT
-    if _CLIENT is None:
+    global _CLIENT, _CLIENT_KEY
+    current_key = get_gemini_key()
+    
+    if _CLIENT is None or current_key != _CLIENT_KEY:
         from google import genai
-        _CLIENT = genai.Client(api_key=_get_api_key())
+        _CLIENT     = genai.Client(api_key=current_key)
+        _CLIENT_KEY = current_key
     return _CLIENT
 
 def _gemini_search(query: str) -> str:
