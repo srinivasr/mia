@@ -14,7 +14,6 @@
     transcript,
     latencyMs,
     isConnected,
-    minimized,
   } from "./lib/stores/miaState";
   import { wizardComplete, flashOverlay } from "./lib/stores/setupStore";
 
@@ -102,8 +101,6 @@
             }
           } else if (msg.type === "open_url" && msg.url) {
             open(msg.url);
-          } else if (msg.type === "minimize_to_orb") {
-            minimized.set(true);
           }
         } catch (e) {
           console.error("WS Parse Error", e);
@@ -127,44 +124,38 @@
 
 <main data-tauri-drag-region>
   {#if $wizardComplete}
-    {#if $minimized}
-      <button class="mini-orb" on:click={() => minimized.set(false)} aria-label="Restore Mia">
-        <div class="mini-orb-ring"></div>
-      </button>
-    {:else}
-      <div class="grid-background"></div>
+    <div class="grid-background"></div>
 
-      <!-- Central Orb Visualization -->
-      <ThreeOrb />
+    <!-- Central Orb Visualization -->
+    <ThreeOrb />
 
-      <!-- Layout Container -->
-      <div class="hud-layout">
-        
-        <!-- Left Panel: Metrics -->
-        <div class="left-panel">
-          <MetricsPanel />
-        </div>
-
-        <!-- Center Bottom: Status Text & Waveform -->
-        <div class="center-bottom">
-          <StatusText state={$currentState} />
-        </div>
-
-        <!-- Right Panel: Terminal Chat and File Drop -->
-        <div class="right-panel">
-          <div class="log-container">
-            <LogPanel {messages} {ws} state={$currentState} onUserMessage={(text) => {
-              const now = new Date().toTimeString().split(" ")[0];
-              messages = [...messages, { time: now, sender: "USER", text }];
-            }} />
-          </div>
-          <div class="drop-container">
-            <FileDropZone {ws} />
-          </div>
-        </div>
-
+    <!-- Layout Container -->
+    <div class="hud-layout">
+      
+      <!-- Left Panel: Metrics -->
+      <div class="left-panel">
+        <MetricsPanel />
       </div>
-    {/if}
+
+      <!-- Center Bottom: Status Text & Waveform -->
+      <div class="center-bottom">
+        <StatusText state={$currentState} />
+      </div>
+
+      <!-- Right Panel: Terminal Chat and File Drop -->
+      <div class="right-panel">
+        <div class="log-container">
+          <LogPanel {messages} {ws} state={$currentState} onUserMessage={(text) => {
+            const now = new Date().toTimeString().split(" ")[0];
+            messages = [...messages, { time: now, sender: "USER", text }];
+          }} />
+        </div>
+        <div class="drop-container">
+          <FileDropZone {ws} />
+        </div>
+      </div>
+
+    </div>
   {:else if $isConnected}
     <SetupScreen {ws} />
   {:else}
@@ -251,43 +242,6 @@
   .drop-container {
     height: 100px;
     flex-shrink: 0;
-  }
-
-  .mini-orb {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: rgba(5, 10, 21, 0.92);
-    border: 1.5px solid var(--pri);
-    cursor: pointer;
-    z-index: 100;
-    box-shadow: 0 0 30px rgba(74, 229, 255, 0.12), inset 0 0 20px rgba(74, 229, 255, 0.04);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: box-shadow 0.3s, transform 0.2s;
-    animation: miniOrbPulse 3s ease-in-out infinite;
-  }
-
-  .mini-orb:hover {
-    box-shadow: 0 0 50px rgba(74, 229, 255, 0.3), inset 0 0 30px rgba(74, 229, 255, 0.1);
-    transform: scale(1.1);
-  }
-
-  .mini-orb-ring {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid var(--pri);
-    opacity: 0.5;
-  }
-
-  @keyframes miniOrbPulse {
-    0%, 100% { box-shadow: 0 0 30px rgba(74, 229, 255, 0.12), inset 0 0 20px rgba(74, 229, 255, 0.04); }
-    50% { box-shadow: 0 0 50px rgba(74, 229, 255, 0.22), inset 0 0 30px rgba(74, 229, 255, 0.08); }
   }
 
   .flash-overlay {

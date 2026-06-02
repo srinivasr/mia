@@ -703,7 +703,6 @@ class MiaLive:
             elif name == "open_world_monitor":
                 url = args.get("url", "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks")
                 self.ui.send_open_url(url)
-                self.ui.send_minimize()
                 result = "World Monitor opened in browser."
 
             elif name == "shutdown_mia":
