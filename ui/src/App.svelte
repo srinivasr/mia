@@ -4,6 +4,8 @@
   import LogPanel from "./lib/components/LogPanel.svelte";
   import FileDropZone from "./lib/components/FileDropZone.svelte";
   import StatusText from "./lib/components/StatusText.svelte";
+  import SetupScreen from "./lib/components/SetupScreen.svelte";
+  import LoadingScreen from "./lib/components/LoadingScreen.svelte";
 
   import { onMount } from "svelte";
   import {
@@ -12,6 +14,7 @@
     latencyMs,
     isConnected,
   } from "./lib/stores/miaState";
+  import { wizardComplete } from "./lib/stores/setupStore";
 
   let ws: WebSocket | null = null;
   let reconnectInterval: ReturnType<typeof setInterval>;
@@ -117,35 +120,41 @@
 </script>
 
 <main data-tauri-drag-region>
-  <div class="grid-background"></div>
+  {#if $wizardComplete}
+    <div class="grid-background"></div>
 
-  <!-- Central Orb Visualization -->
-  <ThreeOrb />
+    <!-- Central Orb Visualization -->
+    <ThreeOrb />
 
-  <!-- Layout Container -->
-  <div class="hud-layout">
-    
-    <!-- Left Panel: Metrics -->
-    <div class="left-panel">
-      <MetricsPanel />
-    </div>
-
-    <!-- Center Bottom: Status Text & Waveform -->
-    <div class="center-bottom">
-      <StatusText state={$currentState} />
-    </div>
-
-    <!-- Right Panel: Logs and File Drop -->
-    <div class="right-panel">
-      <div class="log-container">
-        <LogPanel {messages} />
+    <!-- Layout Container -->
+    <div class="hud-layout">
+      
+      <!-- Left Panel: Metrics -->
+      <div class="left-panel">
+        <MetricsPanel />
       </div>
-      <div class="drop-container">
-        <FileDropZone />
-      </div>
-    </div>
 
-  </div>
+      <!-- Center Bottom: Status Text & Waveform -->
+      <div class="center-bottom">
+        <StatusText state={$currentState} />
+      </div>
+
+      <!-- Right Panel: Logs and File Drop -->
+      <div class="right-panel">
+        <div class="log-container">
+          <LogPanel {messages} />
+        </div>
+        <div class="drop-container">
+          <FileDropZone />
+        </div>
+      </div>
+
+    </div>
+  {:else if $isConnected}
+    <SetupScreen {ws} />
+  {:else}
+    <LoadingScreen />
+  {/if}
 </main>
 
 <style>
