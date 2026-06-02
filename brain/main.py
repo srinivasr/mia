@@ -537,7 +537,7 @@ class MiaLive:
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            self.ui.set_state("IDLE")
 
     def speak(self, text: str):
         if not self._loop or not self.session:
@@ -723,7 +723,7 @@ class MiaLive:
             self.speak_error(name, e)
 
         if not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            self.ui.set_state("IDLE")
 
         logger.info(f"{name} → {str(result)[:80]}")
         return types.FunctionResponse(
@@ -787,13 +787,16 @@ class MiaLive:
                             txt = _clean_transcript(sc.output_transcription.text)
                             if txt:
                                 out_buf.append(txt)
+                                self.ui.send_transcript(txt)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = _clean_transcript(sc.input_transcription.text)
                             if txt:
+                                self.ui.set_state("LISTENING")
                                 in_buf.append(txt)
 
                         if sc.turn_complete:
+                            self.ui.set_state("THINKING")
                             if self._turn_done_event:
                                 self._turn_done_event.set()
 
@@ -804,6 +807,7 @@ class MiaLive:
 
                             full_out = " ".join(out_buf).strip()
                             if full_out:
+                                self.ui.send_transcript(full_out, final=True)
                                 self.ui.write_log(f"MIA: {full_out}")
                             out_buf = []
 
@@ -887,7 +891,7 @@ class MiaLive:
                     self._turn_done_event = asyncio.Event()
 
                     logger.info(f"Connected.")
-                    self.ui.set_state("LISTENING")
+                    self.ui.set_state("IDLE")
                     self.ui.write_log("SYS: MIA online.")
 
                     tg.create_task(self._send_realtime())
