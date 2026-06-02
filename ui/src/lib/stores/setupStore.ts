@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 
-export type SetupStep = 'loading' | 'api_key' | 'checks' | 'ready';
+export type SetupStep = 'loading' | 'api_key' | 'checks' | 'launching';
 
 export interface CheckResult {
   mic: boolean | 'listening' | null;
@@ -34,3 +34,4 @@ export const configStatus = writable<ConfigStatus>({
 });
 export const checkRunning = writable<string | null>(null);
 export const wizardComplete = writable<boolean>(false);
+export const flashOverlay = writable<boolean>(false);

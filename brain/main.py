@@ -504,6 +504,7 @@ class MiaLive:
         self.ui.on_text_command = self._on_text_command
         self._turn_done_event: asyncio.Event | None = None
         self._introduced = False
+        self._launch_signaled = False
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
@@ -831,6 +832,9 @@ class MiaLive:
                         self._turn_done_event.clear()
                     continue
                 self.set_speaking(True)
+                if not self._launch_signaled:
+                    self._launch_signaled = True
+                    self.ui.send_config_update(launch_ready=True)
                 await loop.run_in_executor(None, stream.write, chunk)
         except Exception as e:
             logger.info(f"Play: {e}")
@@ -876,7 +880,7 @@ class MiaLive:
                         self._introduced = True
                         # Small delay so audio pipeline is fully ready before speaking
                         await asyncio.sleep(0.5)
-                        self.speak("System Initialization Complete. Please briefly introduce yourself to the user and ask how you can help.")
+                        self.speak("Hello boss, what are you up to?")
 
             except Exception as e:
                 logger.exception("Exception occurred")

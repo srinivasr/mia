@@ -14,7 +14,7 @@
     latencyMs,
     isConnected,
   } from "./lib/stores/miaState";
-  import { wizardComplete } from "./lib/stores/setupStore";
+  import { wizardComplete, flashOverlay } from "./lib/stores/setupStore";
 
   let ws: WebSocket | null = null;
   let reconnectInterval: ReturnType<typeof setInterval>;
@@ -155,6 +155,10 @@
   {:else}
     <LoadingScreen />
   {/if}
+
+  {#if $flashOverlay}
+    <div class="flash-overlay"></div>
+  {/if}
 </main>
 
 <style>
@@ -232,5 +236,19 @@
     height: 100px;
     flex-shrink: 0;
     pointer-events: auto;
+  }
+
+  .flash-overlay {
+    position: fixed;
+    inset: 0;
+    background: white;
+    z-index: 99999;
+    animation: flashIn 0.3s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes flashIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
 </style>
