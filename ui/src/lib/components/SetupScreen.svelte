@@ -7,6 +7,7 @@
     apiKeyError,
     configStatus,
     wizardComplete,
+    flashOverlay,
     type CheckResult,
     type CheckErrors,
   } from "../stores/setupStore";
@@ -14,6 +15,32 @@
   export let ws: WebSocket | null = null;
 
   let currentWs: WebSocket | null = null;
+
+  let launchReady = false;
+  let launchLine = 0;
+  let flashTriggered = false;
+  let launchTimers: ReturnType<typeof setTimeout>[] = [];
+
+  function startLaunchSequence() {
+    launchLine = 1;
+    launchTimers = [
+      setTimeout(() => { launchLine = 2; }, 1500),
+      setTimeout(() => { launchLine = 3; }, 3000),
+    ];
+  }
+
+  function triggerFlash() {
+    flashOverlay.set(true);
+    setTimeout(() => {
+      wizardComplete.set(true);
+      setTimeout(() => flashOverlay.set(false), 300);
+    }, 300);
+  }
+
+  $: if ($setupStep === "launching" && launchReady && launchLine >= 3 && !flashTriggered) {
+    flashTriggered = true;
+    triggerFlash();
+  }
 
   function send(msg: Record<string, unknown>) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -92,13 +119,11 @@
             check_errors: { ...s.check_errors, ...msg.errors },
           }));
         }
-        if (allChecksHaveResult(get(configStatus).checks)) {
-          if (criticalChecksPassed(get(configStatus).checks)) {
-            setupStep.set("ready");
-          }
+        if (msg.launch_ready) {
+          launchReady = true;
         }
         if (msg.config_done) {
-          wizardComplete.set(true);
+          setupStep.set("launching");
         }
       }
     } catch {}
@@ -146,10 +171,15 @@
     send({ type: "get_config" });
   }
 
+  $: if ($setupStep === "launching") {
+    startLaunchSequence();
+  }
+
   onDestroy(() => {
     if (currentWs) {
       currentWs.removeEventListener("message", handleBridgeMessage);
     }
+    launchTimers.forEach(clearTimeout);
   });
 
   const checkLabels: Record<keyof CheckResult, string> = {
@@ -251,13 +281,20 @@
           </button>
         {/if}
       </div>
-    {:else if $setupStep === "ready"}
-      <div class="step">
-        <h2>Ready</h2>
-        <p>All checks passed. Mia is ready to launch.</p>
-        <button on:click={finishSetup} class="continue-btn">
-          LAUNCH MIA
-        </button>
+    {:else if $setupStep === "launching"}
+      <div class="step launching-step">
+        <div class="launch-orb"></div>
+        <div class="status-lines">
+          {#if launchLine >= 1}
+            <p class="status-line">&gt; ESTABLISHING LINK...</p>
+          {/if}
+          {#if launchLine >= 2}
+            <p class="status-line">&gt; CALIBRATING...</p>
+          {/if}
+          {#if launchLine >= 3}
+            <p class="status-line online">&gt; MIA IS ONLINE</p>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>
@@ -554,5 +591,54 @@
     display: block;
     margin: 16px auto 0;
     padding: 12px 48px;
+  }
+
+  .launching-step {
+    text-align: center;
+    padding: 60px 0;
+  }
+
+  .launch-orb {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 32px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      var(--pri-gho, rgba(74, 229, 255, 0.3)) 0%,
+      transparent 70%
+    );
+    animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 60px var(--pri-gho, rgba(74, 229, 255, 0.2));
+  }
+
+  .status-lines {
+    text-align: left;
+    max-width: 260px;
+    margin: 0 auto;
+  }
+
+  .status-line {
+    font-family: "Courier New", monospace;
+    font-size: 0.85rem;
+    color: var(--muted-c, #666);
+    margin: 8px 0;
+    opacity: 0;
+    animation: lineFadeIn 0.5s ease forwards;
+  }
+
+  .status-line.online {
+    color: var(--green, #4ade80) !important;
+  }
+
+  @keyframes lineFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>
