@@ -77,6 +77,11 @@ fn get_system_stats(sys_state: tauri::State<'_, Mutex<System>>) -> SystemStats {
     }
 }
 
+#[tauri::command]
+fn open_url(url: String) {
+    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+}
+
 fn main() {
     // Enable GPU-accelerated compositing for smooth animations.
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "0");
@@ -84,8 +89,9 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(System::new_all()))
-        .invoke_handler(tauri::generate_handler![get_system_stats])
+        .invoke_handler(tauri::generate_handler![get_system_stats, open_url])
         .setup(|_app| {
             Ok(())
         })
