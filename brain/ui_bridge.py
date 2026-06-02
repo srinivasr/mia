@@ -22,6 +22,8 @@ Protocol (JSON over WebSocket):
   Server → Client:  {"type": "config_update", "checks": {...}, "errors": {...}}
   Client → Server:  {"type": "config_done"}
   Server → Client:  {"type": "config_update", "config_done": true}
+  Server → Client:  {"type": "open_url", "url": "..."}
+  Server → Client:  {"type": "minimize_to_orb"}
 """
 
 import asyncio
@@ -327,6 +329,14 @@ class UIBridge:
         self.send_config_update(config_done=True)
         logger.info("Config done — unblocking main loop.")
 
+    def send_open_url(self, url: str) -> None:
+        """Tell frontend to open a URL in the system browser."""
+        self._broadcast({"type": "open_url", "url": url})
+
+    def send_minimize(self) -> None:
+        """Tell frontend to minimize the HUD to orb-only mode."""
+        self._broadcast({"type": "minimize_to_orb"})
+
     def _broadcast(self, payload: dict) -> None:
         """Thread-safe fire-and-forget broadcast to all WS clients."""
         if not self._loop:
@@ -384,6 +394,11 @@ class UIBridge:
 
                     elif mtype == "config_done":
                         await self._handle_config_done()
+
+                    elif mtype == "world_monitor":
+                        url = "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks"
+                        self.send_open_url(url)
+                        self.send_minimize()
 
                     elif mtype == "stt_request":
                         pass

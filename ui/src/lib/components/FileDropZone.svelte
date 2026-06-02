@@ -1,20 +1,24 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
+  import { open } from "@tauri-apps/plugin-dialog";
+
+  export let ws: WebSocket | null = null;
+
   let isHovering = false;
   let isDragOver = false;
   let currentFile: string | null = null;
   let dashOffset = 0;
-
-  // Simple animation for the dash offset using requestAnimationFrame
   let animationId: number;
+
   function animate() {
     dashOffset = (dashOffset + 0.8) % 20;
     animationId = requestAnimationFrame(animate);
   }
 
-  import { onMount, onDestroy } from 'svelte';
   onMount(() => {
     animate();
   });
+
   onDestroy(() => {
     cancelAnimationFrame(animationId);
   });
@@ -33,7 +37,13 @@
     e.preventDefault();
     isDragOver = false;
     if (e.dataTransfer && e.dataTransfer.files.length > 0) {
-      currentFile = e.dataTransfer.files[0].name;
+      const file = e.dataTransfer.files[0];
+      currentFile = file.name;
+      // WebKit sometimes exposes the full path on the File object
+      const path = (file as any).path || file.name;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "file", path }));
+      }
     }
   }
 
@@ -45,18 +55,39 @@
     isHovering = false;
   }
 
-  function handleClick() {
-    // In a real app, trigger a file dialog here.
-    // We'll leave it as a mock for now to match visual parity.
+  async function handleClick() {
+    const selected = await open({
+      multiple: false,
+      filters: [],
+    });
+    if (selected) {
+      const path = String(selected);
+      currentFile = path.split("/").pop() || path.split("\\").pop() || path;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "file", path }));
+      }
+    }
   }
 
-  $: bgColor = isDragOver ? "#001a24" : (isHovering ? "#001218" : "var(--panel)");
-  $: borderColor = currentFile ? "rgba(0, 255, 136, 0.78)" : (isDragOver ? "rgba(0, 212, 255, 0.9)" : (isHovering ? "rgba(26, 92, 122, 0.78)" : "rgba(13, 51, 71, 0.63)"));
-  $: iconColor = isHovering ? "var(--pri)" : "var(--pri-dim)";
-  $: textColor = isHovering ? "var(--text)" : "var(--pri-dim)";
+  let bgColor: string;
+  let borderColor: string;
+  let iconColor: string;
+  let textColor: string;
+  $: {
+    bgColor = isDragOver ? "#001a24" : isHovering ? "#001218" : "var(--panel)";
+    borderColor = currentFile
+      ? "rgba(0, 255, 136, 0.78)"
+      : isDragOver
+        ? "rgba(0, 212, 255, 0.9)"
+        : isHovering
+          ? "rgba(26, 92, 122, 0.78)"
+          : "rgba(13, 51, 71, 0.63)";
+    iconColor = isHovering ? "var(--pri)" : "var(--pri-dim)";
+    textColor = isHovering ? "var(--text)" : "var(--pri-dim)";
+  }
 </script>
 
-<div 
+<div
   class="file-drop-zone"
   style="background-color: {bgColor}; border-color: {borderColor}; stroke-dashoffset: {dashOffset}"
   on:dragenter={handleDragEnter}
@@ -68,9 +99,12 @@
   on:click={handleClick}
   role="button"
   tabindex="0"
-  on:keydown={(e) => e.key === 'Enter' && handleClick()}
+  on:keydown={(e) => e.key === "Enter" && handleClick()}
 >
-  <div class="dash-border" style="border-color: {borderColor}; background-position: {dashOffset}px 0, 0 {dashOffset}px, {dashOffset}px 100%, 100% {dashOffset}px;"></div>
+  <div
+    class="dash-border"
+    style="border-color: {borderColor}; background-position: {dashOffset}px 0, 0 {dashOffset}px, {dashOffset}px 100%, 100% {dashOffset}px;"
+  ></div>
 
   {#if currentFile}
     <div class="content">
@@ -117,8 +151,7 @@
     bottom: 6px;
     border-radius: 6px;
     pointer-events: none;
-    /* CSS hack for marching ants dashed border */
-    background-image: 
+    background-image:
       linear-gradient(90deg, currentColor 50%, transparent 50%),
       linear-gradient(180deg, currentColor 50%, transparent 50%),
       linear-gradient(90deg, currentColor 50%, transparent 50%),

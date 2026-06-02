@@ -481,6 +481,20 @@ TOOL_DECLARATIONS = [
         }
 
     },
+    {
+        "name": "open_world_monitor",
+        "description": "Opens the World Monitor website showing global news, conflicts, and events on an interactive 3D globe. Use when the user asks about world news, global events, Indian headlines, or current affairs. After calling this, the assistant UI minimizes to a small orb. The URL is: https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url": {
+                    "type": "STRING",
+                    "description": "The World Monitor URL: https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks"
+                }
+            },
+            "required": ["url"]
+        }
+    },
 ]
 
 _CTRL_RE = re.compile(r"<ctrl\d+>", re.IGNORECASE)
@@ -685,6 +699,12 @@ class MiaLive:
             elif name == "flight_finder":
                 r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
                 result = r or "Done."
+
+            elif name == "open_world_monitor":
+                url = args.get("url", "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks")
+                self.ui.send_open_url(url)
+                self.ui.send_minimize()
+                result = "World Monitor opened in browser."
 
             elif name == "shutdown_mia":
                 self.ui.write_log("SYS: Shutdown requested.")
