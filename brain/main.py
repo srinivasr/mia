@@ -882,13 +882,14 @@ class MiaLive:
 
 
 async def _run_all():
-    """Start the UIBridge WS server and MiaLive concurrently."""
+    """Start UIBridge WS server, wait for setup config, then launch MiaLive."""
     ui  = UIBridge()
-    ui.wait_for_api_key()
     mia = MiaLive(ui)
 
     async with asyncio.TaskGroup() as tg:
         tg.create_task(ui.serve())
+        # Wait for setup wizard to complete before starting MiaLive
+        await ui.wait_for_config()
         tg.create_task(mia.run())
 
 
