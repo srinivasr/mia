@@ -337,6 +337,9 @@ class UIBridge:
         """Tell frontend to minimize the HUD to orb-only mode."""
         self._broadcast({"type": "minimize_to_orb"})
 
+    def send_transcript(self, text: str, final: bool = False) -> None:
+        self._broadcast({"type": "transcript", "text": text, "final": final})
+
     def _broadcast(self, payload: dict) -> None:
         """Thread-safe fire-and-forget broadcast to all WS clients."""
         if not self._loop:
