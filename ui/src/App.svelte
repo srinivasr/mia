@@ -30,21 +30,27 @@
     {
       time: new Date().toTimeString().split(" ")[0],
       sender: "SYSTEM",
-      text: "M.I.A. PROTOCOL INITIALIZED."
-    }
+      text: "M.I.A. PROTOCOL INITIALIZED.",
+    },
   ];
 
   onMount(() => {
-    window.onerror = function(msg, url, lineNo, columnNo, error) {
+    window.onerror = function (msg, url, lineNo, columnNo, error) {
       const now = new Date().toTimeString().split(" ")[0];
-      messages = [...messages, { time: now, sender: "ERR", text: `[ERR] ${msg}` }];
+      messages = [
+        ...messages,
+        { time: now, sender: "ERR", text: `[ERR] ${msg}` },
+      ];
       return false;
     };
     const originalError = console.error;
-    console.error = function(...args) {
+    console.error = function (...args) {
       if (args[0] && args[0].toString().includes("WebGL")) {
         const now = new Date().toTimeString().split(" ")[0];
-        messages = [...messages, { time: now, sender: "ERR", text: `[ERR] WebGL: ${args.join(" ")}` }];
+        messages = [
+          ...messages,
+          { time: now, sender: "ERR", text: `[ERR] WebGL: ${args.join(" ")}` },
+        ];
       }
       originalError.apply(console, args);
     };
@@ -79,12 +85,13 @@
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          
+
           if (msg.type === "state" && msg.state) {
-            const stateStr = msg.state.charAt(0).toUpperCase() + msg.state.slice(1).toLowerCase();
+            const stateStr =
+              msg.state.charAt(0).toUpperCase() +
+              msg.state.slice(1).toLowerCase();
             currentState.set(stateStr);
-          } 
-          else if (msg.type === "log" && msg.text) {
+          } else if (msg.type === "log" && msg.text) {
             let txt = msg.text;
 
             if (txt.includes("You:")) {
@@ -101,6 +108,8 @@
             }
           } else if (msg.type === "open_url" && msg.url) {
             open(msg.url);
+          } else if (msg.type === "transcript" && msg.text) {
+            transcript.set(msg.text);
           }
         } catch (e) {
           console.error("WS Parse Error", e);
@@ -131,7 +140,6 @@
 
     <!-- Layout Container -->
     <div class="hud-layout">
-      
       <!-- Left Panel: Metrics -->
       <div class="left-panel">
         <MetricsPanel />
@@ -145,16 +153,20 @@
       <!-- Right Panel: Terminal Chat and File Drop -->
       <div class="right-panel">
         <div class="log-container">
-          <LogPanel {messages} {ws} state={$currentState} onUserMessage={(text) => {
-            const now = new Date().toTimeString().split(" ")[0];
-            messages = [...messages, { time: now, sender: "USER", text }];
-          }} />
+          <LogPanel
+            {messages}
+            {ws}
+            state={$currentState}
+            onUserMessage={(text) => {
+              const now = new Date().toTimeString().split(" ")[0];
+              messages = [...messages, { time: now, sender: "USER", text }];
+            }}
+          />
         </div>
         <div class="drop-container">
           <FileDropZone {ws} />
         </div>
       </div>
-
     </div>
   {:else if $isConnected}
     <SetupScreen {ws} />
@@ -187,7 +199,11 @@
     height: 100vh;
     pointer-events: none;
     z-index: 1;
-    background-image: radial-gradient(circle at center, var(--pri-gho) 1.5px, transparent 1.5px);
+    background-image: radial-gradient(
+      circle at center,
+      var(--pri-gho) 1.5px,
+      transparent 1.5px
+    );
     background-size: 48px 48px;
     background-position: center;
   }
@@ -254,7 +270,11 @@
   }
 
   @keyframes flashIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 </style>
