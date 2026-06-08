@@ -1,21 +1,21 @@
 :root {
-    --bg: #050a15;
-    --panel: rgba(5, 10, 21, 0.65);
+    --bg: #030914;
+    --panel: rgba(3, 9, 20, 0.5);
     --panel2: rgba(30, 30, 38, 0.8);
     --border: rgba(120, 120, 150, 0.15);
     --border-b: rgba(150, 150, 200, 0.3);
     --border-a: rgba(180, 140, 255, 0.5);
-    --pri: #b185ff;
-    --pri-dim: #6c4ca8;
-    --pri-gho: #291c47;
+    --pri: #00e6ff;
+    --pri-dim: #0088aa;
+    --pri-gho: rgba(0, 230, 255, 0.15);
     --acc: #ff4785;
     --acc2: #ffb84d;
     --green: #4ade80;
-    --green-d: #16a34a;
+    --green-dim: rgba(74, 222, 128, 0.2);
     --red: #fb7185;
     --muted-c: #8e8e9c;
-    --text: #f4f4f5;
-    --text-dim: #a1a1aa;
+    --text: #ffffff;
+    --text-dim: #8b9fb6;
     --text-med: #d4d4d8;
     --white: #ffffff;
     --dark: #000000;
@@ -30,10 +30,38 @@ body {
     height: 100vh;
     overflow: hidden;
     background-color: var(--bg);
-    background-image: radial-gradient(circle at center, #101928 0%, #000000 100%);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
                  Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
     color: var(--text);
+}
+
+.grid-background {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 0;
+    background-color: var(--bg);
+    background-image: linear-gradient(rgba(0, 230, 255, 0.05) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0, 230, 255, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.grid-background::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+    background-size: 100% 4px;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.grid-background::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at center, transparent 20%, #01040a 90%);
+    pointer-events: none;
 }
 
 #app {

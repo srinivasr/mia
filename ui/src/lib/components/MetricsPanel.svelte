@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { currentState, latencyMs, isConnected } from "../stores/miaState";
   import { stateColor } from "../stores/theme";
+  import SciFiPanel from "./SciFiPanel.svelte";
 
   let cpu = 0;
   let mem = 0;
@@ -109,7 +110,8 @@
   });
 </script>
 
-<div class="telemetry" style="border-color: rgba({borderRgb}, 0.25)">
+<SciFiPanel title="SYSTEM">
+  <div class="telemetry-inner">
   {#if fetchError}
     <div class="error-banner">Stats unavailable</div>
   {/if}
@@ -208,20 +210,15 @@
       <span class="rt-value" style="color: var(--text-dim)">{uptime}</span>
     </div>
   </div>
-</div>
+  </div>
+</SciFiPanel>
 
 <style>
-  .telemetry {
-    background: rgba(5, 10, 21, 0.65);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid;
-    border-radius: 14px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    padding: 16px 14px;
+  .telemetry-inner {
     width: 100%;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .error-banner {

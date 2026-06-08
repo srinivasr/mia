@@ -6,6 +6,11 @@
   import StatusText from "./lib/components/StatusText.svelte";
   import SetupScreen from "./lib/components/SetupScreen.svelte";
   import LoadingScreen from "./lib/components/LoadingScreen.svelte";
+  import TimePanel from "./lib/components/TimePanel.svelte";
+  import WeatherPanel from "./lib/components/WeatherPanel.svelte";
+  import ModulesPanel from "./lib/components/ModulesPanel.svelte";
+  import CameraFeedPanel from "./lib/components/CameraFeedPanel.svelte";
+  import ChatPanel from "./lib/components/ChatPanel.svelte";
 
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-shell";
@@ -135,37 +140,46 @@
   {#if $wizardComplete}
     <div class="grid-background"></div>
 
-    <!-- Central Orb Visualization -->
     <ThreeOrb />
 
-    <!-- Layout Container -->
     <div class="hud-layout">
-      <!-- Left Panel: Metrics -->
       <div class="left-panel">
+        <TimePanel />
+        <WeatherPanel />
         <MetricsPanel />
+        <ModulesPanel />
       </div>
 
-      <!-- Center Bottom: Status Text & Waveform -->
+      <div class="center-top">
+        <div class="core-brackets">
+          <div class="c-bracket tl"></div><div class="c-bracket tr"></div>
+          <div class="c-bracket bl"></div><div class="c-bracket br"></div>
+        </div>
+        <div class="core-title">M.I.A</div>
+      </div>
+
       <div class="center-bottom">
         <StatusText state={$currentState} />
       </div>
 
-      <!-- Right Panel: Terminal Chat and File Drop -->
       <div class="right-panel">
-        <div class="log-container">
-          <LogPanel
-            {messages}
-            {ws}
-            state={$currentState}
-            onUserMessage={(text) => {
-              const now = new Date().toTimeString().split(" ")[0];
-              messages = [...messages, { time: now, sender: "USER", text }];
-            }}
-          />
-        </div>
-        <div class="drop-container">
-          <FileDropZone {ws} />
-        </div>
+        <CameraFeedPanel />
+        <LogPanel 
+          {messages} 
+          {ws} 
+          state={$currentState}
+          onUserMessage={(text) => {
+            const now = new Date().toTimeString().split(" ")[0];
+            messages = [...messages, { time: now, sender: "USER", text }];
+          }}
+        />
+        <ChatPanel on:send={(e) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "text_command", text: e.detail }));
+            const now = new Date().toTimeString().split(" ")[0];
+            messages = [...messages, { time: now, sender: "USER", text: e.detail }];
+          }
+        }} />
       </div>
     </div>
   {:else if $isConnected}
@@ -225,17 +239,68 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: 24px;
     width: clamp(200px, 20vw, 320px);
     height: 100%;
+    animation: bootSlideLeft 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
   .center-bottom {
     position: absolute;
-    bottom: 0;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    opacity: 0;
+    animation: bootFadeUp 1.2s ease-out forwards;
+    animation-delay: 0.4s;
   }
+
+  .center-top {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .core-title {
+    font-size: 2rem;
+    letter-spacing: 6px;
+    color: var(--text);
+    font-weight: 300;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+
+
+  .core-brackets {
+    position: absolute;
+    width: 140%;
+    height: 140%;
+    top: -20%;
+    left: -20%;
+    pointer-events: none;
+  }
+  
+  .c-bracket {
+    position: absolute;
+    width: 12px; height: 12px;
+    border: 1px solid var(--text-dim);
+  }
+  .c-bracket.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .c-bracket.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .c-bracket.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+  .c-bracket.br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+
 
   .right-panel {
     display: flex;
@@ -243,21 +308,32 @@
     width: clamp(300px, 30vw, 480px);
     height: 100%;
     pointer-events: none;
+    opacity: 0;
+    animation: bootSlideRight 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.2s;
   }
 
-  .right-panel > * {
-    pointer-events: auto;
+  @keyframes bootSlideLeft {
+    0% { transform: translateX(-60px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
   }
 
-  .log-container {
-    flex: 1;
+  @keyframes bootSlideRight {
+    0% { transform: translateX(60px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes bootFadeUp {
+    0% { transform: translate(-50%, 30px); opacity: 0; }
+    100% { transform: translate(-50%, 0); opacity: 1; }
+  }
+
+  :global(.right-panel > .scifi-panel) {
     margin-bottom: 16px;
-    overflow: hidden;
   }
 
-  .drop-container {
-    height: 100px;
-    flex-shrink: 0;
+  :global(.right-panel > .scifi-panel:last-child) {
+    margin-bottom: 0;
   }
 
   .flash-overlay {
