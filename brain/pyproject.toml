@@ -1,11 +1,14 @@
 [project]
 name = "mia-brain"
 version = "0.2.0"
-description = "Project mia_n_mia brain — Gemini Live AI backend"
+description = "Project mia brain — Gemini Live AI backend"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "openwakeword>=0.6.0",
+    "onnxruntime>=1.15.0",
     "google-genai",
     "google-generativeai>=0.4.0",
     "websockets>=12.0",
@@ -24,6 +27,7 @@ dependencies = [
     "youtube-transcript-api",
     "python-pptx",
     "python-dotenv",
+    "webrtcvad>=2.0.10",
 ]
 
 [build-system]

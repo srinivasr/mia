@@ -1,5 +1,5 @@
 """
-Mia Brain — main entry point for mia_n_mia.
+Mia Brain — main entry point for mia.
 
 Core entry point for the Mia AI Backend. Handles all Gemini Live + tool-calling logic.
 The UIBridge (WebSocket server on ws://127.0.0.1:8765) allows the Svelte/Tauri 
@@ -7,6 +7,9 @@ frontend to connect without any GUI toolkit.
 """
 
 import asyncio
+import collections
+import numpy as np
+
 import re
 import sys
 import threading
@@ -78,6 +81,14 @@ def _load_system_prompt() -> str:
 
 
 TOOL_DECLARATIONS = [
+    {
+        "name": "end_conversation",
+        "description": (
+            "Ends the current conversation and puts Mia back to sleep. "
+            "Use this when the user says 'goodbye', 'go to sleep', or indicates the interaction is over."
+        ),
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
     {
         "name": "open_app",
         "description": (
@@ -523,6 +534,22 @@ class MiaLive:
         self._launch_signaled = False
         self.session_id = uuid.uuid4().hex
 
+        self.wakeword_active = False
+        self.pre_roll_buffer = collections.deque(maxlen=int(SEND_SAMPLE_RATE / 1280 * 1.5))
+        self.vosk_model = None
+        self.vosk_rec = None
+        
+        try:
+            from pathlib import Path
+            import vosk
+            vosk.SetLogLevel(-1)
+            model_path = str(Path(__file__).parent / "vosk_model")
+            self.vosk_model = vosk.Model(model_path)
+            self.vosk_rec = vosk.KaldiRecognizer(self.vosk_model, SEND_SAMPLE_RATE)
+            logger.info("Vosk offline model loaded.")
+        except Exception as e:
+            logger.error(f"Failed to load vosk: {e}")
+
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
@@ -745,17 +772,39 @@ class MiaLive:
             await self.session.send_realtime_input(media=msg)
 
     async def _listen_audio(self):
-        logger.info(f"Mic started")
+        logger.info(f"Mic started (Continuous)")
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 mia_speaking = self._is_speaking
-            if not mia_speaking and not self.ui.muted:
-                data = indata.tobytes()
+            data = indata.tobytes()
+            
+            if not self.wakeword_active and self.vosk_rec:
+                if self.vosk_rec.AcceptWaveform(data):
+                    res = json.loads(self.vosk_rec.Result())
+                    text = res.get("text", "")
+                else:
+                    res = json.loads(self.vosk_rec.PartialResult())
+                    text = res.get("partial", "")
+                
+                if re.search(r'\bmia\b', text.lower()) or "hey mia" in text.lower():
+                    logger.info(f"WAKE WORD DETECTED IN: '{text}'")
+                    def _wake():
+                        self.wakeword_active = True
+                        self.ui.set_state("LISTENING")
+                    loop.call_soon_threadsafe(_wake)
+                else:
+                    self.pre_roll_buffer.append(data)
+                return
+
+            if self.wakeword_active and not mia_speaking and not self.ui.muted:
                 def _enqueue():
                     try:
-                        self.out_queue.put_nowait({"data": data, "mime_type": "audio/pcm"})
+                        if self.out_queue:
+                            while self.pre_roll_buffer:
+                                self.out_queue.put_nowait({"data": self.pre_roll_buffer.popleft(), "mime_type": "audio/pcm"})
+                            self.out_queue.put_nowait({"data": data, "mime_type": "audio/pcm"})
                     except asyncio.QueueFull:
                         pass
                 loop.call_soon_threadsafe(_enqueue)
@@ -765,12 +814,12 @@ class MiaLive:
                 samplerate=SEND_SAMPLE_RATE,
                 channels=CHANNELS,
                 dtype="int16",
-                blocksize=SEND_CHUNK_SIZE,
+                blocksize=1280,
                 callback=callback,
             ):
-                logger.info(f"Mic stream open")
+                logger.info(f"Mic stream open (Waiting for Wake Word)")
                 while True:
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(0.1)
         except Exception as e:
             logger.info(f"Mic: {e}")
             raise
@@ -821,6 +870,12 @@ class MiaLive:
                                 log_message(self.session_id, "assistant", full_out)
                             out_buf = []
 
+                            self.wakeword_active = False
+                            if self.vosk_rec:
+                                self.vosk_rec.Reset()
+                            self.ui.set_state("IDLE")
+                            logger.info("Turn complete. Muting mic.")
+
                     if response.tool_call:
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
@@ -838,52 +893,59 @@ class MiaLive:
     async def _play_audio(self):
         logger.info(f"Play started")
 
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=RECV_CHUNK_SIZE,
-        )
-        stream.start()
-
         loop = asyncio.get_event_loop()
 
         try:
-            while True:
-                try:
-                    chunk = await asyncio.wait_for(
-                        self.audio_in_queue.get(),
-                        timeout=0.02
-                    )
-                except asyncio.TimeoutError:
-                    if (
-                        self._turn_done_event
-                        and self._turn_done_event.is_set()
-                        and self.audio_in_queue.empty()
-                    ):
-                        self.set_speaking(False)
-                        self._turn_done_event.clear()
-                    continue
-                self.set_speaking(True)
-                if not self._launch_signaled:
-                    self._launch_signaled = True
-                    self.ui.send_config_update(launch_ready=True)
-                await loop.run_in_executor(None, stream.write, chunk)
+            with sd.RawOutputStream(
+                samplerate=RECEIVE_SAMPLE_RATE,
+                channels=CHANNELS,
+                dtype="int16",
+                blocksize=RECV_CHUNK_SIZE,
+            ) as stream:
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self.audio_in_queue.get(),
+                            timeout=0.02
+                        )
+                    except asyncio.TimeoutError:
+                        if (
+                            self._turn_done_event
+                            and self._turn_done_event.is_set()
+                            and self.audio_in_queue.empty()
+                        ):
+                            self.set_speaking(False)
+                            self._turn_done_event.clear()
+                        continue
+                    self.set_speaking(True)
+                    if not self._launch_signaled:
+                        self._launch_signaled = True
+                        self.ui.send_config_update(launch_ready=True)
+                    try:
+                        await loop.run_in_executor(None, stream.write, chunk)
+                    except Exception as write_err:
+                        logger.warning(f"Play write error (ignored): {write_err}")
         except Exception as e:
             logger.info(f"Play: {e}")
             raise
         finally:
             self.set_speaking(False)
-            stream.stop()
-            stream.close()
 
     async def run(self):
         client = genai.Client(
             api_key=get_gemini_key(),
             http_options={"api_version": "v1beta"}
         )
+        
+        # Start mic listener independently
+        asyncio.create_task(self._listen_audio())
 
         while True:
+            logger.info("SLEEP_MODE: Waiting for wake word...")
+            self.ui.set_state("IDLE")
+            self.ui.write_log("SYS: Zzz... Waiting for wake word.")
+            # removed wakeword_active check
+
             try:
                 logger.info(f"Connecting...")
                 self.ui.set_state("INITIALIZING")
@@ -896,16 +958,14 @@ class MiaLive:
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
                     self.audio_in_queue = asyncio.Queue()
-                    # Larger send queue avoids silent drops under mic burst traffic
                     self.out_queue      = asyncio.Queue(maxsize=50)
                     self._turn_done_event = asyncio.Event()
 
                     logger.info(f"Connected.")
-                    self.ui.set_state("IDLE")
-                    self.ui.write_log("SYS: MIA online.")
+                    self.ui.set_state("LISTENING")
+                    self.ui.write_log("SYS: Awake and streaming!")
 
                     tg.create_task(self._send_realtime())
-                    tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
 
@@ -915,14 +975,16 @@ class MiaLive:
                         await asyncio.sleep(0.5)
                         self.speak("Hello boss, what are you up to?")
 
+                    # Keep connection alive indefinitely
+                    while True:
+                        await asyncio.sleep(1.0)
+
             except* Exception as eg:
                 for exc in eg.exceptions:
                     logger.info(f"Session error: {exc}")
                 traceback.print_exc()
+                
             self.set_speaking(False)
-            self.ui.set_state("THINKING")
-            logger.info(f"Reconnecting in 3s...")
-            await asyncio.sleep(3)
 
 
 async def _run_all():

@@ -31,3 +31,7 @@ brain/venv/
 __pycache__/
 *.pyc
 .env
+
+# Models
+brain/vosk_model/
+brain/wakeword_models/

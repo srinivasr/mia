@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for mia_n_mia — grants event listening, window dragging, and all invoke commands.",
+  "description": "Default capabilities for mia — grants event listening, window dragging, and all invoke commands.",
   "windows": ["main"],
   "permissions": [
     "core:default",

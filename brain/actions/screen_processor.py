@@ -68,9 +68,10 @@ def _save_config_key(key: str, value) -> None:
 
 
 def _get_api_key() -> str:
-    key = os.environ.get("GEMINI_API_KEY", "")
+    # Prefer config file (consistent with main.py / config_manager)
+    key = _load_config().get("gemini_api_key", "") or os.environ.get("GEMINI_API_KEY", "")
     if not key:
-        raise RuntimeError("GEMINI_API_KEY not found in env.")
+        raise RuntimeError("Gemini API key not found in config or environment.")
     return key
 
 
@@ -376,23 +377,22 @@ class _VisionSession:
             raise  
 
     async def _play_loop(self) -> None:
-        stream = sd.RawOutputStream(
-            samplerate=_RECEIVE_SAMPLE_RATE,
-            channels=_CHANNELS,
-            dtype="int16",
-            blocksize=_CHUNK_SIZE,
-        )
-        stream.start()
         try:
-            while True:
-                chunk = await self._audio_in.get()
-                await asyncio.to_thread(stream.write, chunk)
+            with sd.RawOutputStream(
+                samplerate=_RECEIVE_SAMPLE_RATE,
+                channels=_CHANNELS,
+                dtype="int16",
+                blocksize=_CHUNK_SIZE,
+            ) as stream:
+                while True:
+                    chunk = await self._audio_in.get()
+                    try:
+                        await asyncio.to_thread(stream.write, chunk)
+                    except Exception as write_err:
+                        logger.warning(f"Play write error (ignored): {write_err}")
         except Exception as e:
             logger.exception("An error occurred")
             raise
-        finally:
-            stream.stop()
-            stream.close()
 
 _session      = _VisionSession()
 _session_lock = threading.Lock()
