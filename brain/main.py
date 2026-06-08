@@ -12,6 +12,7 @@ import sys
 import threading
 import json
 import traceback
+import uuid
 from pathlib import Path
 
 import sounddevice as sd
@@ -21,6 +22,7 @@ from ui_bridge import UIBridge
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
 )
+from memory.history_manager import log_message, get_recent_context
 
 from actions.file_processor import file_processor
 from actions.flight_finder     import flight_finder
@@ -519,10 +521,12 @@ class MiaLive:
         self._turn_done_event: asyncio.Event | None = None
         self._introduced = False
         self._launch_signaled = False
+        self.session_id = uuid.uuid4().hex
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+        log_message(self.session_id, "user", text)
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -561,6 +565,7 @@ class MiaLive:
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
+        recent_ctx = get_recent_context(limit=15)
 
         now      = datetime.now()
         time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
@@ -573,6 +578,8 @@ class MiaLive:
         parts = [time_ctx]
         if mem_str:
             parts.append(mem_str)
+        if recent_ctx:
+            parts.append(recent_ctx)
         parts.append(sys_prompt)
 
         return types.LiveConnectConfig(
@@ -726,6 +733,7 @@ class MiaLive:
             self.ui.set_state("IDLE")
 
         logger.info(f"{name} → {str(result)[:80]}")
+        log_message(self.session_id, "system", f"Tool '{name}' returned: {result}", msg_type="tool")
         return types.FunctionResponse(
             id=fc.id, name=name,
             response={"result": result}
@@ -803,12 +811,14 @@ class MiaLive:
                             full_in = " ".join(in_buf).strip()
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
+                                log_message(self.session_id, "user", full_in)
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
                             if full_out:
                                 self.ui.send_transcript(full_out, final=True)
                                 self.ui.write_log(f"MIA: {full_out}")
+                                log_message(self.session_id, "assistant", full_out)
                             out_buf = []
 
                     if response.tool_call:
@@ -905,8 +915,9 @@ class MiaLive:
                         await asyncio.sleep(0.5)
                         self.speak("Hello boss, what are you up to?")
 
-            except Exception as e:
-                logger.exception("Exception occurred")
+            except* Exception as eg:
+                for exc in eg.exceptions:
+                    logger.info(f"Session error: {exc}")
                 traceback.print_exc()
             self.set_speaking(False)
             self.ui.set_state("THINKING")
