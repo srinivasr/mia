@@ -787,8 +787,12 @@ class MiaLive:
                 else:
                     res = json.loads(self.vosk_rec.PartialResult())
                     text = res.get("partial", "")
-                
-                if re.search(r'\bmia\b', text.lower()) or "hey mia" in text.lower():
+                if text.strip():
+                    # Debug print so we can see what Vosk is actually hearing
+                    print(f"VOSK HEARD: '{text}'")
+
+                # Broadened regex to catch common misspellings of 'mia'
+                if re.search(r'\b(mia|mya|maya|me a|mi a|hey a)\b', text.lower()) or "hey mia" in text.lower():
                     logger.info(f"WAKE WORD DETECTED IN: '{text}'")
                     def _wake():
                         self.wakeword_active = True
