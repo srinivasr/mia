@@ -535,6 +535,7 @@ class MiaLive:
         self.session_id = uuid.uuid4().hex
 
         self.wakeword_active = False
+        self._reset_vosk = False
         self.pre_roll_buffer = collections.deque(maxlen=int(SEND_SAMPLE_RATE / 1280 * 1.5))
         self.vosk_model = None
         self.vosk_rec = None
@@ -783,13 +784,19 @@ class MiaLive:
             
             if not self.wakeword_active and self.vosk_rec:
                 with self.lock:
-                    if self.vosk_rec.AcceptWaveform(data):
+                    try:
+                        accepted = self.vosk_rec.AcceptWaveform(data)
+                    except Exception as e:
+                        logger.error(f"Vosk error ignored: {e}")
+                        self.vosk_rec.Reset()
+                        accepted = False
+                        
+                    if accepted:
                         res = json.loads(self.vosk_rec.Result())
                         text = res.get("text", "")
                     else:
                         res = json.loads(self.vosk_rec.PartialResult())
                         text = res.get("partial", "")
-
                 if text.strip():
                     # Debug print so we can see what Vosk is actually hearing
                     print(f"VOSK HEARD: '{text}'")
