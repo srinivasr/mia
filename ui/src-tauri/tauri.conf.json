@@ -1,7 +1,7 @@
 {
-  "productName": "mia_n_mia",
+  "productName": "mia",
   "version": "0.1.0",
-  "identifier": "com.mianmia.dev",
+  "identifier": "com.mia.dev",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "mia_n_mia",
+        "title": "mia",
         "fullscreen": true,
         "transparent": false,
         "decorations": false,

@@ -4,7 +4,7 @@ set -e
 # Setup trap to kill background jobs when script exits
 trap 'kill $(jobs -p) 2>/dev/null || true' SIGINT SIGTERM EXIT
 
-echo "Starting mia_n_mia runtime..."
+echo "Starting mia runtime..."
 
 # Kill lingering processes that might bind to our ports
 echo "Cleaning up old processes..."

@@ -1,5 +1,5 @@
 [package]
-name = "mia_n_mia"
+name = "mia"
 version = "0.1.0"
 description = "Mia runtime native edge layer"
 authors = ["you"]
