@@ -538,6 +538,7 @@ class MiaLive:
         self.pre_roll_buffer = collections.deque(maxlen=int(SEND_SAMPLE_RATE / 1280 * 1.5))
         self.vosk_model = None
         self.vosk_rec = None
+        self.lock = threading.Lock()
         
         try:
             from pathlib import Path
@@ -781,12 +782,13 @@ class MiaLive:
             data = indata.tobytes()
             
             if not self.wakeword_active and self.vosk_rec:
-                if self.vosk_rec.AcceptWaveform(data):
-                    res = json.loads(self.vosk_rec.Result())
-                    text = res.get("text", "")
-                else:
-                    res = json.loads(self.vosk_rec.PartialResult())
-                    text = res.get("partial", "")
+                with self.lock:
+                    if self.vosk_rec.AcceptWaveform(data):
+                        res = json.loads(self.vosk_rec.Result())
+                        text = res.get("text", "")
+                    else:
+                        res = json.loads(self.vosk_rec.PartialResult())
+                        text = res.get("partial", "")
                 
                 if re.search(r'\bmia\b', text.lower()) or "hey mia" in text.lower():
                     logger.info(f"WAKE WORD DETECTED IN: '{text}'")
@@ -872,7 +874,8 @@ class MiaLive:
 
                             self.wakeword_active = False
                             if self.vosk_rec:
-                                self.vosk_rec.Reset()
+                                with self.lock:
+                                    self.vosk_rec.Reset()
                             self.ui.set_state("IDLE")
                             logger.info("Turn complete. Muting mic.")
 
