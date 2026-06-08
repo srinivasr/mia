@@ -35,3 +35,5 @@ __pycache__/
 # Models
 brain/vosk_model/
 brain/wakeword_models/
+*.db
+history.db
