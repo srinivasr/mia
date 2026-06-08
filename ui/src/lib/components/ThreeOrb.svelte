@@ -257,8 +257,8 @@
         glowCanvas.width = glowCanvas.height = 256;
         const ctx = glowCanvas.getContext("2d")!;
         const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-        gradient.addColorStop(0,   "rgba(0, 180, 255, 0.25)");
-        gradient.addColorStop(0.3, "rgba(0, 100, 200, 0.08)");
+        gradient.addColorStop(0,   "rgba(0, 180, 255, 0.6)");
+        gradient.addColorStop(0.3, "rgba(0, 100, 200, 0.2)");
         gradient.addColorStop(1,   "rgba(0, 0, 0, 0)");
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 256, 256);
@@ -553,8 +553,14 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
-        pointer-events: auto;  /* must be auto so mousemove registers */
+        pointer-events: auto;
         z-index: 10;
+        animation: floatOrb 6s ease-in-out infinite;
+    }
+
+    @keyframes floatOrb {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-15px); }
     }
 
     .mode-hint {
