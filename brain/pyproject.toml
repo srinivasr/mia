@@ -12,6 +12,7 @@ dependencies = [
     "google-genai",
     "google-generativeai>=0.4.0",
     "websockets>=12.0",
+    "vosk",
     "Pillow>=10.2.0",
     "requests",
     "beautifulsoup4",
