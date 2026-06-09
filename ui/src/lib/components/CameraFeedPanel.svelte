@@ -1,13 +1,18 @@
 <script lang="ts">
   import SciFiPanel from "./SciFiPanel.svelte";
   import { onMount, onDestroy } from "svelte";
+  import { cameraFrame } from "../stores/miaState";
 
-  let videoElement: HTMLVideoElement;
   let canvasElement: HTMLCanvasElement;
-  let stream: MediaStream | null = null;
-  let hasError = false;
-  let errorMessage = "";
   let animId: number;
+
+  $: hasError = !$cameraFrame;
+  $: errorMessage = "FEED UNAVAILABLE";
+
+  let fps = 0;
+  let frames = 0;
+
+  $: if ($cameraFrame) frames++;
 
   function startSimulatedFeed() {
     if (!canvasElement) return;
@@ -40,33 +45,17 @@
     draw();
   }
 
-  onMount(async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("API Unavailable (HTTPS/localhost required)");
-      }
-      stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoElement) {
-        videoElement.srcObject = stream;
-      }
-    } catch (err: any) {
-      console.error("Camera access failed:", err);
-      hasError = true;
-      if (err.name === "NotAllowedError") {
-        errorMessage = "PERMISSION DENIED";
-      } else if (err.name === "NotFoundError") {
-        errorMessage = "NO CAMERA FOUND";
-      } else {
-        errorMessage = "FEED UNAVAILABLE";
-      }
-      startSimulatedFeed();
-    }
+  onMount(() => {
+    startSimulatedFeed();
+    const interval = setInterval(() => {
+      fps = frames;
+      frames = 0;
+    }, 1000);
+    
+    return () => clearInterval(interval);
   });
 
   onDestroy(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
     if (animId) cancelAnimationFrame(animId);
   });
 </script>
@@ -88,21 +77,13 @@
         <div class="err-sub">SIMULATING FEED...</div>
       </div>
     {/if}
-    <video autoplay playsinline bind:this={videoElement} class="camera-feed" class:hidden={hasError}></video>
-    <div class="tracking-overlay">
-      <div class="target-box" class:err-pulse={hasError}>
-        <div class="t-corner tl" class:err-border={hasError}></div>
-        <div class="t-corner tr" class:err-border={hasError}></div>
-        <div class="t-corner bl" class:err-border={hasError}></div>
-        <div class="t-corner br" class:err-border={hasError}></div>
-      </div>
-    </div>
+    <img src={$cameraFrame} class="camera-feed" class:hidden={hasError} alt="camera" />
+    <div class="tracking-overlay"></div>
   </div>
 
   <div class="meta-bar">
     <span>VISION: <span class={hasError ? "red" : "green"}>{hasError ? "OFFLINE" : "ONLINE"}</span></span>
-    <span>FPS: {hasError ? "00" : "30"}</span>
-    <span>LIGHT: {hasError ? "00%" : "72%"}</span>
+    <span>FPS: {hasError ? "00" : fps.toString().padStart(2, '0')}</span>
   </div>
 </SciFiPanel>
 
@@ -121,6 +102,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform: scaleX(-1);
   }
   
   .tracking-overlay {
@@ -133,32 +115,7 @@
     box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
   }
   
-  .target-box {
-    width: 140px;
-    height: 140px;
-    position: relative;
-  }
-  
-  .target-box::after {
-    content: "";
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 4px; height: 4px;
-    background: var(--green);
-    transform: translate(-50%, -50%);
-  }
 
-  .t-corner {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--green);
-  }
-  .t-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
-  .t-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
-  .t-corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
-  .t-corner.br { bottom: 0; right: 0; border-left: none; border-top: none; }
-  
   .meta-bar {
     display: flex;
     justify-content: space-between;
@@ -238,13 +195,6 @@
     letter-spacing: 1px;
   }
 
-  .err-border {
-    border-color: var(--red) !important;
-  }
-
-  .err-pulse::after {
-    background: var(--red) !important;
-  }
 
   @keyframes blink {
     0%, 100% { opacity: 1; }

@@ -180,16 +180,19 @@ TOOL_DECLARATIONS = [
         "name": "screen_process",
         "description": (
             "Captures and analyzes the screen or webcam image. "
-            "MUST be called when user asks what is on screen, what you see, "
-            "analyze my screen, look at camera, etc. "
-            "You have NO visual ability without this tool. "
+            "MUST be called when the user asks what is on screen, what you see, "
+            "analyze my screen, look at camera, or asks about objects in front of the camera (e.g. 'how many fingers am I holding up?'). "
+            "IMPORTANT: If the user asks a follow-up question about the screen or camera "
+            "(e.g. 'and now?', 'how about now?', 'what else?'), you MUST call this tool AGAIN, "
+            "and you MUST rephrase the 'text' parameter to include the FULL context "
+            "(e.g. 'How many fingers am I holding up now?'). The vision module is stateless and will not understand 'and now?'. "
             "After calling this tool, stay SILENT — the vision module speaks directly."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "angle": {"type": "STRING", "description": "'screen' to capture display, 'camera' for webcam. Default: 'screen'"},
-                "text":  {"type": "STRING", "description": "The question or instruction about the captured image"}
+                "text":  {"type": "STRING", "description": "The fully rephrased question or instruction about the captured image"}
             },
             "required": ["text"]
         }
@@ -682,7 +685,7 @@ class MiaLive:
                 threading.Thread(
                     target=screen_process,
                     kwargs={"parameters": args, "response": None,
-                            "player": self.ui, "session_memory": None},
+                            "player": self.ui, "session_id": self.session_id},
                     daemon=True
                 ).start()
                 result = "Vision module activated. Stay completely silent — vision module will speak directly."

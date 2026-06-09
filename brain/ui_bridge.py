@@ -340,6 +340,11 @@ class UIBridge:
     def send_transcript(self, text: str, final: bool = False) -> None:
         self._broadcast({"type": "transcript", "text": text, "final": final})
 
+    def send_camera_frame(self, frame_bytes: bytes) -> None:
+        import base64
+        b64 = base64.b64encode(frame_bytes).decode('ascii')
+        self._broadcast({"type": "camera_frame", "data": b64})
+
     def _broadcast(self, payload: dict) -> None:
         """Thread-safe fire-and-forget broadcast to all WS clients."""
         if not self._loop:
@@ -419,6 +424,15 @@ class UIBridge:
     async def serve(self) -> None:
         """Start the WebSocket server."""
         self._loop = asyncio.get_event_loop()
+        
+        # Start camera thread and register callback to stream frames
+        try:
+            from actions.camera_manager import on_new_frame, start_feed
+            on_new_frame(self.send_camera_frame)
+            start_feed()
+        except Exception as e:
+            logger.error(f"Failed to start camera thread: {e}")
+
         logger.info(f"WS server starting on ws://{WS_HOST}:{WS_PORT}")
         async with websockets.serve(self._handle, WS_HOST, WS_PORT, max_size=10_485_760):
             logger.info(f"WS server ready ws://{WS_HOST}:{WS_PORT}")
