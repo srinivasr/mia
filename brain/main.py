@@ -783,7 +783,14 @@ class MiaLive:
             
             if not self.wakeword_active and self.vosk_rec:
                 with self.lock:
-                    if self.vosk_rec.AcceptWaveform(data):
+                    try:
+                        accepted = self.vosk_rec.AcceptWaveform(data)
+                    except Exception as e:
+                        logger.error(f"Vosk error ignored: {e}")
+                        self.vosk_rec.Reset()
+                        accepted = False
+
+                    if accepted:
                         res = json.loads(self.vosk_rec.Result())
                         text = res.get("text", "")
                     else:
