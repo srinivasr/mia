@@ -65,6 +65,7 @@ class UIBridge:
         # Setup wizard state
         self._config_event = asyncio.Event()
         self._configured: bool = False
+        self.require_wake_word: bool = True
         self._check_results: dict = {
             "mic": None, "speakers": None,
             "internet": None, "gemini": None,
@@ -322,9 +323,10 @@ class UIBridge:
         finally:
             self._checks_running = False
 
-    async def _handle_config_done(self) -> None:
+    async def _handle_config_done(self, msg: dict) -> None:
         """Finalize setup and unblock wait_for_config."""
         self._configured = True
+        self.require_wake_word = msg.get("require_wake_word", True)
         self._config_event.set()
         self.send_config_update(config_done=True)
         logger.info("Config done — unblocking main loop.")
@@ -401,7 +403,7 @@ class UIBridge:
                         asyncio.create_task(self._run_checks())
 
                     elif mtype == "config_done":
-                        await self._handle_config_done()
+                        await self._handle_config_done(msg)
 
                     elif mtype == "world_monitor":
                         url = "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks"

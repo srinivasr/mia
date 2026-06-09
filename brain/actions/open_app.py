@@ -2,260 +2,430 @@ import time
 import subprocess
 import platform
 import shutil
+import os
+import re
+import shlex
+import difflib
+import json
+import threading
 
 from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
-
-try:
-    import psutil
-    _PSUTIL = True
-except ImportError:
-    _PSUTIL = False
-
 _SYSTEM = platform.system()
+_APP_CACHE = None
+_CACHE_LOCK = threading.Lock()
 
-_APP_ALIASES: dict[str, dict[str, str]] = {
+def _get_cache_path() -> str:
+    if _SYSTEM == "Linux":
+        cache_dir = os.path.expanduser("~/.cache/mia")
+    elif _SYSTEM == "Windows":
+        cache_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Mia")
+    else:
+        cache_dir = os.path.expanduser("~/Library/Caches/Mia")
+        
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, "app_cache.json")
 
-    "chrome":             {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
-    "google chrome":      {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
-    "firefox":            {"Windows": "firefox",                 "Darwin": "Firefox",              "Linux": "firefox"},
-    "edge":               {"Windows": "msedge",                  "Darwin": "Microsoft Edge",       "Linux": "microsoft-edge"},
-    "brave":              {"Windows": "brave",                   "Darwin": "Brave Browser",        "Linux": "brave-browser"},
-    "safari":             {"Windows": "msedge",                  "Darwin": "Safari",               "Linux": "firefox"},
-    "opera":              {"Windows": "opera",                   "Darwin": "Opera",                "Linux": "opera"},
-    "whatsapp":           {"Windows": "WhatsApp",                "Darwin": "WhatsApp",             "Linux": "whatsapp"},
-    "telegram":           {"Windows": "Telegram",                "Darwin": "Telegram",             "Linux": "telegram"},
-    "discord":            {"Windows": "Discord",                 "Darwin": "Discord",              "Linux": "discord"},
-    "slack":              {"Windows": "Slack",                   "Darwin": "Slack",                "Linux": "slack"},
-    "zoom":               {"Windows": "Zoom",                    "Darwin": "zoom.us",              "Linux": "zoom"},
-    "teams":              {"Windows": "msteams",                 "Darwin": "Microsoft Teams",      "Linux": "teams"},
-    "skype":              {"Windows": "skype",                   "Darwin": "Skype",                "Linux": "skype"},
-    "signal":             {"Windows": "signal",                  "Darwin": "Signal",               "Linux": "signal"},
-    "spotify":            {"Windows": "Spotify",                 "Darwin": "Spotify",              "Linux": "spotify"},
-    "vlc":                {"Windows": "vlc",                     "Darwin": "VLC",                  "Linux": "vlc"},
-    "netflix":            {"Windows": "Netflix",                 "Darwin": "Netflix",              "Linux": "firefox"},
-    "vscode":             {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "visual studio code": {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "code":               {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "terminal":           {"Windows": "wt",                      "Darwin": "Terminal",             "Linux": "gnome-terminal"},
-    "cmd":                {"Windows": "cmd.exe",                 "Darwin": "Terminal",             "Linux": "bash"},
-    "powershell":         {"Windows": "powershell.exe",          "Darwin": "Terminal",             "Linux": "bash"},
-    "postman":            {"Windows": "Postman",                 "Darwin": "Postman",              "Linux": "postman"},
-    "git":                {"Windows": "git-bash",                "Darwin": "Terminal",             "Linux": "bash"},
-    "figma":              {"Windows": "Figma",                   "Darwin": "Figma",                "Linux": "figma"},
-    "blender":            {"Windows": "blender",                 "Darwin": "Blender",              "Linux": "blender"},
-    "word":               {"Windows": "winword",                 "Darwin": "Microsoft Word",       "Linux": "libreoffice --writer"},
-    "excel":              {"Windows": "excel",                   "Darwin": "Microsoft Excel",      "Linux": "libreoffice --calc"},
-    "powerpoint":         {"Windows": "powerpnt",                "Darwin": "Microsoft PowerPoint", "Linux": "libreoffice --impress"},
-    "libreoffice":        {"Windows": "soffice",                 "Darwin": "LibreOffice",          "Linux": "libreoffice"},
-    "notepad":            {"Windows": "notepad.exe",             "Darwin": "TextEdit",             "Linux": "gedit"},
-    "textedit":           {"Windows": "notepad.exe",             "Darwin": "TextEdit",             "Linux": "gedit"},
-    "explorer":           {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
-    "file explorer":      {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
-    "finder":             {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
-    "task manager":       {"Windows": "taskmgr.exe",             "Darwin": "Activity Monitor",     "Linux": "gnome-system-monitor"},
-    "settings":           {"Windows": "ms-settings:",            "Darwin": "System Preferences",   "Linux": "gnome-control-center"},
-    "calculator":         {"Windows": "calc.exe",                "Darwin": "Calculator",           "Linux": "gnome-calculator"},
-    "paint":              {"Windows": "mspaint.exe",             "Darwin": "Preview",              "Linux": "gimp"},
-    "instagram":          {"Windows": "Instagram",               "Darwin": "Instagram",            "Linux": "firefox"},
-    "tiktok":             {"Windows": "TikTok",                  "Darwin": "TikTok",               "Linux": "firefox"},
-    "notion":             {"Windows": "Notion",                  "Darwin": "Notion",               "Linux": "notion"},
-    "obsidian":           {"Windows": "Obsidian",                "Darwin": "Obsidian",             "Linux": "obsidian"},
-    "capcut":             {"Windows": "CapCut",                  "Darwin": "CapCut",               "Linux": "capcut"},
-    "steam":              {"Windows": "steam",                   "Darwin": "Steam",                "Linux": "steam"},
-    "epic":               {"Windows": "EpicGamesLauncher",       "Darwin": "Epic Games Launcher",  "Linux": "legendary"},
-    "epic games":         {"Windows": "EpicGamesLauncher",       "Darwin": "Epic Games Launcher",  "Linux": "legendary"},
-}
+def normalize_name(name: str) -> str:
+    name = name.lower()
+    name = re.sub(r'[^\w\s]', '', name)
+    return name.replace(" ", "")
 
+def _get_os_app_dirs() -> list[str]:
+    if _SYSTEM == "Linux":
+        return [
+            "/usr/share/applications",
+            os.path.expanduser("~/.local/share/applications"),
+            "/var/lib/flatpak/exports/share/applications",
+            os.path.expanduser("~/.local/share/flatpak/exports/share/applications")
+        ]
+    elif _SYSTEM == "Windows":
+        return [
+            r"C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+            os.path.expanduser(r"~\AppData\Roaming\Microsoft\Windows\Start Menu\Programs")
+        ]
+    elif _SYSTEM == "Darwin":
+        return ["/Applications", os.path.expanduser("~/Applications")]
+    return []
 
-def _normalize(raw: str) -> str:
-    key = raw.lower().strip()
+def _get_max_mtime() -> float:
+    max_mtime = 0.0
+    for d in _get_os_app_dirs():
+        if os.path.isdir(d):
+            try:
+                mtime = os.stat(d).st_mtime
+                if mtime > max_mtime:
+                    max_mtime = mtime
+            except Exception:
+                pass
+    return max_mtime
 
-    if key in _APP_ALIASES:
-        return _APP_ALIASES[key].get(_SYSTEM, raw)
+def _add_to_cache(app_dict: dict, name: str, exec_basename: str, desktop_filename: str):
+    global _APP_CACHE
+    if not name:
+        return
+        
+    keys = set()
+    keys.add(normalize_name(name))
+    if desktop_filename:
+        clean_file = desktop_filename.rsplit('.', 1)[0]
+        keys.add(normalize_name(clean_file))
+    if exec_basename:
+        keys.add(normalize_name(exec_basename))
+        
+    for k in keys:
+        if k:
+            _APP_CACHE[k] = app_dict
 
-    for alias_key, os_map in _APP_ALIASES.items():
-        if alias_key in key or key in alias_key:
-            return os_map.get(_SYSTEM, raw)
+def discover_apps() -> dict:
+    global _APP_CACHE
+    if _APP_CACHE is not None:
+        return _APP_CACHE
+        
+    with _CACHE_LOCK:
+        if _APP_CACHE is not None:
+            return _APP_CACHE
 
-    return raw  
-
-def _launch_windows(app_name: str) -> bool:
-
-    if shutil.which(app_name) or shutil.which(app_name.split(".")[0]):
+        cache_path = _get_cache_path()
+        current_mtime = _get_max_mtime()
+        
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if data.get("mtime", 0) >= current_mtime:
+                        _APP_CACHE = data.get("cache", {})
+                        logger.info("Loaded applications from persistent cache.")
+                        return _APP_CACHE
+            except Exception as e:
+                logger.warning(f"Failed to load app cache: {e}")
+        
+        logger.info("Rebuilding application cache...")
+        _APP_CACHE = {}
+        if _SYSTEM == "Linux":
+            discover_linux_apps()
+        elif _SYSTEM == "Darwin":
+            discover_macos_apps()
+        elif _SYSTEM == "Windows":
+            discover_windows_apps()
+            
         try:
-            subprocess.Popen(
-                app_name,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            time.sleep(1.5)
-            return True
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump({"mtime": current_mtime, "cache": _APP_CACHE}, f)
         except Exception as e:
-            logger.exception("Operation failed")
+            logger.warning(f"Failed to save app cache: {e}")
 
-    if ":" in app_name:
+    return _APP_CACHE
+
+def refresh_app_cache():
+    global _APP_CACHE
+    with _CACHE_LOCK:
+        _APP_CACHE = None
+    discover_apps()
+
+def parse_desktop_file(path: str):
+    name = None
+    exec_cmd = None
+    categories = []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            in_desktop_entry = False
+            for line in f:
+                line = line.strip()
+                if line == "[Desktop Entry]":
+                    in_desktop_entry = True
+                    continue
+                elif line.startswith("[") and in_desktop_entry:
+                    in_desktop_entry = False
+                    continue
+                
+                if in_desktop_entry:
+                    if line.startswith("Name="):
+                        if not name:
+                            name = line[5:]
+                    elif line.startswith("Exec="):
+                        if not exec_cmd:
+                            exec_cmd = line[5:]
+                    elif line.startswith("Categories="):
+                        categories = line[11:].split(";")
+                    elif line.startswith("NoDisplay=true") or line.startswith("Hidden=true"):
+                        return
+    except Exception:
+        return
+        
+    if name and exec_cmd:
+        clean_exec = re.sub(r'%[fFuUick]\b', '', exec_cmd).strip()
+        
         try:
-            subprocess.Popen(f"start {app_name}", shell=True)
-            time.sleep(1.0)
-            return True
+            parts = shlex.split(clean_exec)
+            exec_basename = ""
+            for p in parts:
+                if "=" in p or p in ["env", "sh", "-c"]:
+                    continue
+                if p == "flatpak" and len(parts) > parts.index(p) + 2 and parts[parts.index(p)+1] == "run":
+                    exec_basename = parts[parts.index(p)+2].split(".")[-1]
+                    break
+                exec_basename = os.path.basename(p)
+                break
+        except ValueError:
+            exec_basename = ""
+            
+        app_dict = {
+            "name": name,
+            "exec": clean_exec,
+            "path": path,
+            "type": "desktop",
+            "categories": categories,
+            "desktop_file": os.path.basename(path)
+        }
+        _add_to_cache(app_dict, name, exec_basename, os.path.basename(path))
+
+def discover_linux_apps():
+    for d in _get_os_app_dirs():
+        if not os.path.isdir(d):
+            continue
+        for root, _, files in os.walk(d):
+            for file in files:
+                if file.endswith(".desktop"):
+                    path = os.path.join(root, file)
+                    parse_desktop_file(path)
+
+def discover_macos_apps():
+    for d in _get_os_app_dirs():
+        if not os.path.isdir(d):
+            continue
+        try:
+            for folder in os.listdir(d):
+                if folder.endswith(".app"):
+                    path = os.path.join(d, folder)
+                    name = folder[:-4]
+                    app_dict = {
+                        "name": name,
+                        "path": path,
+                        "type": "app"
+                    }
+                    _add_to_cache(app_dict, name, name, folder)
         except Exception:
             pass
 
+def discover_windows_apps():
+    for d in _get_os_app_dirs():
+        if not os.path.isdir(d):
+            continue
+        for root, _, files in os.walk(d):
+            for file in files:
+                if file.endswith(".lnk"):
+                    path = os.path.join(root, file)
+                    name = file[:-4]
+                    app_dict = {
+                        "name": name,
+                        "path": path,
+                        "type": "shortcut"
+                    }
+                    _add_to_cache(app_dict, name, name, file)
+                    
     try:
-        import pyautogui
-        pyautogui.PAUSE = 0.1
-        pyautogui.press("win")
-        time.sleep(0.7)
-        pyautogui.write(app_name, interval=0.05)
-        time.sleep(0.9)
-        pyautogui.press("enter")
-        time.sleep(2.5)
-        return True
+        import winreg
+        for hive in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+            try:
+                with winreg.OpenKey(hive, key_path) as key:
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            sub_key_name = winreg.EnumKey(key, i)
+                            with winreg.OpenKey(key, sub_key_name) as sub_key:
+                                try:
+                                    display_name = winreg.QueryValueEx(sub_key, "DisplayName")[0]
+                                except FileNotFoundError:
+                                    continue
+                                
+                                app_dict = {
+                                    "name": display_name,
+                                    "type": "registry"
+                                }
+                                _add_to_cache(app_dict, display_name, "", "")
+                        except OSError:
+                            pass
+            except FileNotFoundError:
+                pass
+    except Exception:
+        pass
+
+def _resolve_terminal() -> dict | None:
+    if _SYSTEM == "Linux":
+        if "TERMINAL" in os.environ and shutil.which(os.environ["TERMINAL"]):
+            return {"exec": os.environ["TERMINAL"], "type": "executable", "name": "Terminal"}
+        for t in ["xdg-terminal-exec", "x-terminal-emulator"]:
+            if shutil.which(t):
+                return {"exec": t, "type": "executable", "name": "Terminal"}
+        for app in _APP_CACHE.values():
+            if "TerminalEmulator" in app.get("categories", []):
+                return app
+        for t in ["ghostty", "kitty", "alacritty", "foot", "wezterm", "gnome-terminal", "konsole", "xfce4-terminal"]:
+            if shutil.which(t):
+                return {"exec": t, "type": "executable", "name": "Terminal"}
+                
+    elif _SYSTEM == "Darwin":
+        if "TERMINAL" in os.environ and shutil.which(os.environ["TERMINAL"]):
+            return {"exec": os.environ["TERMINAL"], "type": "executable", "name": "Terminal"}
+        for t in ["Warp.app", "iTerm.app", "Terminal.app"]:
+            path = os.path.join("/Applications", t)
+            if os.path.exists(path):
+                return {"path": path, "type": "app", "name": "Terminal"}
+                
+    elif _SYSTEM == "Windows":
+        for t in ["wt.exe", "powershell.exe", "cmd.exe"]:
+            if shutil.which(t):
+                return {"exec": t, "type": "executable", "name": "Terminal"}
+    return None
+
+def _resolve_browser() -> dict | None:
+    if _SYSTEM == "Linux":
+        try:
+            res = subprocess.check_output(["xdg-settings", "get", "default-web-browser"], text=True).strip()
+            for app in _APP_CACHE.values():
+                if app.get("desktop_file") == res:
+                    return app
+        except Exception:
+            pass
+        return {"exec": "xdg-open https://", "type": "shell", "name": "Browser"}
+    elif _SYSTEM == "Darwin":
+        return {"exec": "open https://", "type": "shell", "name": "Browser"}
+    elif _SYSTEM == "Windows":
+        return {"exec": "start https://", "type": "shell", "name": "Browser"}
+
+def _resolve_files() -> dict | None:
+    if _SYSTEM == "Linux":
+        try:
+            res = subprocess.check_output(["xdg-mime", "query", "default", "inode/directory"], text=True).strip()
+            if "kitty" not in res.lower() and "terminal" not in res.lower():
+                for app in _APP_CACHE.values():
+                    if app.get("desktop_file") == res:
+                        return app
+        except Exception:
+            pass
+            
+        for app in _APP_CACHE.values():
+            if "FileManager" in app.get("categories", []):
+                return app
+        return {"exec": "xdg-open ~", "type": "shell", "name": "File Manager"}
+    elif _SYSTEM == "Darwin":
+        return {"exec": "open ~", "type": "shell", "name": "Finder"}
+    elif _SYSTEM == "Windows":
+        return {"exec": "explorer.exe", "type": "executable", "name": "Explorer"}
+
+def _resolve_editor() -> dict | None:
+    for env in ["VISUAL", "EDITOR"]:
+        if env in os.environ and shutil.which(os.environ[env]):
+            return {"exec": os.environ[env], "type": "executable", "name": "Editor"}
+    if _SYSTEM == "Windows":
+        return {"exec": "notepad.exe", "type": "executable", "name": "Editor"}
+    return None
+
+def _resolve_settings() -> dict | None:
+    if _SYSTEM == "Windows":
+        return {"exec": "ms-settings:", "type": "shell", "name": "Settings"}
+    elif _SYSTEM == "Linux":
+        for app in _APP_CACHE.values():
+            if "Settings" in app.get("categories", []):
+                return app
+    return None
+
+def resolve_system_role(name: str) -> dict | None:
+    target = name.lower().strip()
+    if target in ["terminal", "console", "shell"]:
+        return _resolve_terminal()
+    if target in ["browser", "web browser", "internet"]:
+        return _resolve_browser()
+    if target in ["files", "file manager", "folders", "explorer"]:
+        return _resolve_files()
+    if target in ["editor", "text editor"]:
+        return _resolve_editor()
+    if target == "settings":
+        return _resolve_settings()
+    return None
+
+def find_application(name: str) -> dict | None:
+    discover_apps()
+    
+    role_app = resolve_system_role(name)
+    if role_app:
+        return role_app
+        
+    norm_name = normalize_name(name)
+    
+    if norm_name in _APP_CACHE:
+        return _APP_CACHE[norm_name]
+        
+    for k, v in _APP_CACHE.items():
+        if k.startswith(norm_name):
+            return v
+            
+    for k, v in _APP_CACHE.items():
+        if norm_name in k:
+            return v
+            
+    matches = difflib.get_close_matches(norm_name, _APP_CACHE.keys(), n=1, cutoff=0.75)
+    if matches:
+        return _APP_CACHE[matches[0]]
+        
+    return None
+
+def launch_application(app: dict) -> bool:
+    try:
+        app_type = app.get("type")
+        if app_type == "desktop" and "exec" in app:
+            cmd = shlex.split(app["exec"])
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        elif app_type == "executable" and "exec" in app:
+            subprocess.Popen([app["exec"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        elif app_type == "shell" and "exec" in app:
+            subprocess.Popen(app["exec"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        elif app_type == "app" and "path" in app:
+            subprocess.Popen(["open", app["path"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        elif app_type == "shortcut" and "path" in app:
+            if hasattr(os, "startfile"):
+                os.startfile(app["path"])
+            else:
+                subprocess.Popen(["start", app["path"]], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
     except Exception as e:
-        logger.exception("Operation failed")
-
+        logger.exception("Launch failed")
     return False
 
-
-def _launch_macos(app_name: str) -> bool:
-
-    try:
-        result = subprocess.run(
-            ["open", "-a", app_name],
-            capture_output=True, timeout=8
-        )
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(
-            ["open", "-a", f"{app_name}.app"],
-            capture_output=True, timeout=8
-        )
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
-
-    binary = shutil.which(app_name) or shutil.which(app_name.lower())
-    if binary:
-        try:
-            subprocess.Popen(
-                [binary],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            time.sleep(1.0)
-            return True
-        except Exception:
-            pass
-
-    try:
-        import pyautogui
-        pyautogui.hotkey("command", "space")
-        time.sleep(0.6)
-        pyautogui.write(app_name, interval=0.05)
-        time.sleep(0.8)
-        pyautogui.press("enter")
-        time.sleep(1.5)
-        return True
-    except Exception as e:
-        logger.exception("Operation failed")
-
-    return False
-
-
-def _launch_linux(app_name: str) -> bool:
-
-    binary = (
-        shutil.which(app_name) or
-        shutil.which(app_name.lower()) or
-        shutil.which(app_name.lower().replace(" ", "-")) or
-        shutil.which(app_name.lower().replace(" ", "_"))
-    )
-    if binary:
-        try:
-            subprocess.Popen(
-                [binary],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            time.sleep(1.0)
-            return True
-        except Exception:
-            pass
-
-    try:
-        subprocess.run(
-            ["xdg-open", app_name],
-            capture_output=True, timeout=5
-        )
-        return True
-    except Exception:
-        pass
-
-    for desktop_name in [
-        app_name.lower(),
-        app_name.lower().replace(" ", "-"),
-        app_name.lower().replace(" ", ""),
-    ]:
-        try:
-            result = subprocess.run(
-                ["gtk-launch", desktop_name],
-                capture_output=True, timeout=5
-            )
-            if result.returncode == 0:
-                return True
-        except Exception:
-            pass
-
-    return False
-
-
-_OS_LAUNCHERS = {
-    "Windows": _launch_windows,
-    "Darwin":  _launch_macos,
-    "Linux":   _launch_linux,
-}
-
-def open_app(
-    parameters=None,
-    response=None,
-    player=None,
-    session_memory=None,
-) -> str:
+def open_app(parameters=None, response=None, player=None, session_memory=None) -> str:
     app_name = (parameters or {}).get("app_name", "").strip()
-
     if not app_name:
         return "No application name provided."
-
-    launcher = _OS_LAUNCHERS.get(_SYSTEM)
-    if launcher is None:
-        return f"Unsupported operating system: {_SYSTEM}"
-
-    normalized = _normalize(app_name)
-    logger.info(f"Launching: '{app_name}' → '{normalized}' ({_SYSTEM})")
-
+        
     if player:
         player.write_log(f"[open_app] {app_name}")
-
-    try:
-        if launcher(normalized):
+        
+    app = find_application(app_name)
+    
+    if app:
+        if launch_application(app):
+            return f"Opened {app.get('name', app_name)}."
+            
+    if shutil.which(app_name):
+        try:
+            subprocess.Popen([app_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return f"Opened {app_name}."
-        if normalized.lower() != app_name.lower():
-            if launcher(app_name):
+        except Exception:
+            pass
+            
+    if _SYSTEM == "Linux":
+        try:
+            result = subprocess.run(["gtk-launch", app_name], capture_output=True, timeout=5)
+            if result.returncode == 0:
                 return f"Opened {app_name}."
-        return (
-            f"Could not confirm that {app_name} launched. "
-            f"It may still be loading, or it might not be installed."
-        )
-    except Exception as e:
-        logger.exception("An error occurred")
-        return f"Failed to open {app_name}: {e}"
+        except Exception:
+            pass
+            
+    return f"Failed to open {app_name}: Could not find or launch application."

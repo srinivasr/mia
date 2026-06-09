@@ -20,6 +20,7 @@
   let launchLine = 0;
   let flashTriggered = false;
   let launchTimers: ReturnType<typeof setTimeout>[] = [];
+  let requireWakeWord = true;
 
   function startLaunchSequence() {
     launchLine = 1;
@@ -140,7 +141,7 @@
   }
 
   function finishSetup() {
-    send({ type: "config_done" });
+    send({ type: "config_done", require_wake_word: requireWakeWord });
   }
 
   function goBackToApiKey() {
@@ -257,6 +258,12 @@
               </div>
             {/if}
           {/each}
+        </div>
+        <div class="settings" style="margin-top: 16px; margin-bottom: 24px;">
+          <label class="wake-word-label">
+            <input type="checkbox" bind:checked={requireWakeWord} />
+            Require Wake Word (Mia)
+          </label>
         </div>
         {#if allChecksDone($configStatus.checks)}
           <button on:click={finishSetup} class="continue-btn">
@@ -585,6 +592,29 @@
   .back-btn:hover {
     background: var(--muted-c, #8e8e9c);
     color: var(--bg, #0a0a0f);
+  }
+
+  .retry-btn:hover,
+  .continue-btn:hover {
+    background: #000;
+    color: #fff;
+    border-color: #fff;
+  }
+
+  .wake-word-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--txt, #c0c0d0);
+    cursor: pointer;
+  }
+
+  .wake-word-label input {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
   }
 
   .back-btn.centered {
