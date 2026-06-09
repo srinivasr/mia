@@ -781,7 +781,9 @@ class MiaLive:
                 mia_speaking = self._is_speaking
             data = indata.tobytes()
             
-            if not self.wakeword_active and self.vosk_rec:
+            requires_wake = self.ui.require_wake_word
+
+            if requires_wake and not self.wakeword_active and self.vosk_rec:
                 with self.lock:
                     try:
                         accepted = self.vosk_rec.AcceptWaveform(data)
@@ -812,7 +814,7 @@ class MiaLive:
                     self.pre_roll_buffer.append(data)
                 return
 
-            if self.wakeword_active and not mia_speaking and not self.ui.muted:
+            if (not requires_wake or self.wakeword_active) and not mia_speaking and not self.ui.muted:
                 def _enqueue():
                     try:
                         if self.out_queue:
@@ -884,12 +886,17 @@ class MiaLive:
                                 log_message(self.session_id, "assistant", full_out)
                             out_buf = []
 
-                            self.wakeword_active = False
+                            if self.ui.require_wake_word:
+                                self.wakeword_active = False
+                                self.ui.set_state("IDLE")
+                                logger.info("Turn complete. Muting mic. Waiting for wake word.")
+                            else:
+                                self.ui.set_state("LISTENING")
+                                logger.info("Turn complete. Listening continuously.")
+
                             if self.vosk_rec:
                                 with self.lock:
                                     self.vosk_rec.Reset()
-                            self.ui.set_state("IDLE")
-                            logger.info("Turn complete. Muting mic.")
 
                     if response.tool_call:
                         fn_responses = []
@@ -963,10 +970,14 @@ class MiaLive:
         asyncio.create_task(self._listen_audio())
 
         while True:
-            logger.info("SLEEP_MODE: Waiting for wake word...")
-            self.ui.set_state("IDLE")
-            self.ui.write_log("SYS: Zzz... Waiting for wake word.")
-            # removed wakeword_active check
+            if self.ui.require_wake_word:
+                logger.info("SLEEP_MODE: Waiting for wake word...")
+                self.ui.set_state("IDLE")
+                self.ui.write_log("SYS: Zzz... Waiting for wake word.")
+            else:
+                logger.info("Active Mode: Listening continuously...")
+                self.ui.set_state("LISTENING")
+                self.ui.write_log("SYS: Awake and streaming continuously.")
 
             try:
                 logger.info(f"Connecting...")
