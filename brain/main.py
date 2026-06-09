@@ -535,7 +535,6 @@ class MiaLive:
         self.session_id = uuid.uuid4().hex
 
         self.wakeword_active = False
-        self._reset_vosk = False
         self.pre_roll_buffer = collections.deque(maxlen=int(SEND_SAMPLE_RATE / 1280 * 1.5))
         self.vosk_model = None
         self.vosk_rec = None
@@ -790,13 +789,14 @@ class MiaLive:
                         logger.error(f"Vosk error ignored: {e}")
                         self.vosk_rec.Reset()
                         accepted = False
-                        
+
                     if accepted:
                         res = json.loads(self.vosk_rec.Result())
                         text = res.get("text", "")
                     else:
                         res = json.loads(self.vosk_rec.PartialResult())
                         text = res.get("partial", "")
+
                 if text.strip():
                     # Debug print so we can see what Vosk is actually hearing
                     print(f"VOSK HEARD: '{text}'")
@@ -907,8 +907,20 @@ class MiaLive:
 
     async def _play_audio(self):
         logger.info(f"Play started")
+        
+        buffer = bytearray()
+        buf_lock = threading.Lock()
 
-        loop = asyncio.get_event_loop()
+        def audio_cb(outdata, frames, time, status):
+            needed = len(outdata)
+            with buf_lock:
+                if len(buffer) >= needed:
+                    outdata[:] = buffer[:needed]
+                    del buffer[:needed]
+                else:
+                    outdata[:len(buffer)] = buffer
+                    outdata[len(buffer):] = b'\x00' * (needed - len(buffer))
+                    buffer.clear()
 
         try:
             with sd.RawOutputStream(
@@ -916,30 +928,25 @@ class MiaLive:
                 channels=CHANNELS,
                 dtype="int16",
                 blocksize=RECV_CHUNK_SIZE,
+                callback=audio_cb
             ) as stream:
                 while True:
                     try:
-                        chunk = await asyncio.wait_for(
-                            self.audio_in_queue.get(),
-                            timeout=0.02
-                        )
+                        chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.02)
                     except asyncio.TimeoutError:
-                        if (
-                            self._turn_done_event
-                            and self._turn_done_event.is_set()
-                            and self.audio_in_queue.empty()
-                        ):
+                        if self._turn_done_event and self._turn_done_event.is_set() and self.audio_in_queue.empty():
                             self.set_speaking(False)
                             self._turn_done_event.clear()
                         continue
+                    
                     self.set_speaking(True)
                     if not self._launch_signaled:
                         self._launch_signaled = True
                         self.ui.send_config_update(launch_ready=True)
-                    try:
-                        await loop.run_in_executor(None, stream.write, chunk)
-                    except Exception as write_err:
-                        logger.warning(f"Play write error (ignored): {write_err}")
+                    
+                    with buf_lock:
+                        buffer.extend(chunk)
+                        
         except Exception as e:
             logger.info(f"Play: {e}")
             raise
