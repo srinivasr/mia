@@ -153,88 +153,7 @@ def _capture_screen() -> tuple[bytes, str]:
     return _compress(png, "PNG")
 
 
-def _cv2_backend() -> int:
-    """Return the best OpenCV camera backend for the current OS."""
-    if not _CV2:
-        return 0
-    os_name = _get_os()
-    if os_name == "windows":
-        return cv2.CAP_DSHOW    
-    if os_name == "mac":
-        return cv2.CAP_AVFOUNDATION  
-    return cv2.CAP_ANY
 
-
-def _probe_camera(index: int, backend: int, warmup: int = 5) -> bool:
-
-    if not _CV2:
-        return False
-    cap = cv2.VideoCapture(index, backend)
-    if not cap.isOpened():
-        cap.release()
-        return False
-    for _ in range(warmup):
-        cap.read()
-    ret, frame = cap.read()
-    cap.release()
-    if not ret or frame is None:
-        return False
-    return bool(np.mean(frame) > 8)
-
-
-def _detect_camera_index() -> int:
-
-    backend = _cv2_backend()
-    logger.info(f"Auto-detecting camera...")
-    for idx in range(6):
-        if _probe_camera(idx, backend):
-            logger.info(f"Camera found at index {idx}")
-            _save_config_key("camera_index", idx)
-            return idx
-        logger.info(f"Camera index {idx}: no usable frame")
-
-    logger.info(f"No camera found — defaulting to index 0")
-    _save_config_key("camera_index", 0)
-    return 0
-
-
-def _get_camera_index() -> int:
-    cfg = _load_config()
-    if "camera_index" in cfg:
-        return int(cfg["camera_index"])
-    return _detect_camera_index()
-
-
-def _capture_camera() -> tuple[bytes, str]:
-    if not _CV2:
-        raise RuntimeError("OpenCV (cv2) is not installed. Run: pip install opencv-python")
-
-    index   = _get_camera_index()
-    backend = _cv2_backend()
-    cap     = cv2.VideoCapture(index, backend)
-
-    if not cap.isOpened():
-        raise RuntimeError(f"Camera index {index} could not be opened.")
-
-    for _ in range(10):
-        cap.read()
-
-    ret, frame = cap.read()
-    cap.release()
-
-    if not ret or frame is None:
-        raise RuntimeError("Camera returned no frame.")
-
-    if _PIL:
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = PIL.Image.fromarray(rgb)
-        img.thumbnail((_IMG_MAX_W, _IMG_MAX_H), PIL.Image.BILINEAR)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=_JPEG_Q)
-        return buf.getvalue(), "image/jpeg"
-
-    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_Q])
-    return buf.tobytes(), "image/jpeg"
 
 class _VisionSession:
     def __init__(self):
@@ -265,12 +184,12 @@ class _VisionSession:
             raise RuntimeError(f"Vision session did not connect within {timeout}s.")
         logger.info(f"Session ready")
 
-    def analyze(self, image_bytes: bytes, mime_type: str, user_text: str) -> None:
+    def analyze(self, image_bytes: bytes, mime_type: str, user_text: str, session_id: str = None) -> None:
         if not self._loop or not self._out_queue:
             logger.info(f"Session not started — dropping request")
             return
         asyncio.run_coroutine_threadsafe(
-            self._out_queue.put((image_bytes, mime_type, user_text)),
+            self._out_queue.put((image_bytes, mime_type, user_text, session_id)),
             self._loop,
         )
 
@@ -334,7 +253,8 @@ class _VisionSession:
 
     async def _send_loop(self) -> None:
         while True:
-            image_bytes, mime_type, user_text = await self._out_queue.get()
+            image_bytes, mime_type, user_text, session_id = await self._out_queue.get()
+            self._current_session_id = session_id
             if not self._session:
                 logger.info(f"No session — dropping image")
                 continue
@@ -376,6 +296,9 @@ class _VisionSession:
                         if full:
                             self._player.write_log(f"MIA: {full}")
                             logger.info(f"{full}")
+                            if getattr(self, "_current_session_id", None):
+                                from memory.history_manager import log_message
+                                log_message(self._current_session_id, "assistant", full)
                     transcript = []
 
         except Exception as e:
@@ -434,7 +357,7 @@ def screen_process(
     parameters:     dict,
     response=None,
     player=None,
-    session_memory=None,
+    session_id=None,
 ) -> bool:
 
     params    = parameters or {}
@@ -455,7 +378,8 @@ def screen_process(
 
     try:
         if angle == "camera":
-            image_bytes, mime_type = _capture_camera()
+            from actions.camera_manager import capture
+            image_bytes, mime_type = capture()
             logger.info(f"Camera: {len(image_bytes):,} bytes")
         else:
             image_bytes, mime_type = _capture_screen()
@@ -464,7 +388,7 @@ def screen_process(
         logger.exception("An error occurred")
         return False
 
-    _session.analyze(image_bytes, mime_type, user_text)
+    _session.analyze(image_bytes, mime_type, user_text, session_id)
     return True
 
 

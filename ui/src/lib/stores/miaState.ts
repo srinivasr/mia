@@ -17,3 +17,4 @@ export const transcript = writable<string>('');
 export const latencyMs = writable<number>(0);
 export const isConnected = writable<boolean>(false);
 export const minimized = writable<boolean>(false);
+export const cameraFrame = writable<string>('');

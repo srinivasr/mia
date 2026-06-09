@@ -19,6 +19,7 @@
     transcript,
     latencyMs,
     isConnected,
+    cameraFrame,
   } from "./lib/stores/miaState";
   import { wizardComplete, flashOverlay } from "./lib/stores/setupStore";
 
@@ -115,6 +116,8 @@
             open(msg.url);
           } else if (msg.type === "transcript" && msg.text) {
             transcript.set(msg.text);
+          } else if (msg.type === "camera_frame" && msg.data) {
+            cameraFrame.set("data:image/jpeg;base64," + msg.data);
           }
         } catch (e) {
           console.error("WS Parse Error", e);
