@@ -4,12 +4,6 @@
   const dispatch = createEventDispatcher();
   let inputText = "";
 
-  const suggestions = [
-    "/help",
-    "/status",
-    "/clear"
-  ];
-
   function handleSend() {
     if (inputText.trim()) {
       dispatch("send", inputText);
@@ -23,12 +17,6 @@
 </script>
 
 <div class="chat-panel">
-  <div class="suggestions">
-    {#each suggestions as sug}
-      <button class="chip" on:click={() => { inputText = sug; handleSend(); }}>{sug}</button>
-    {/each}
-  </div>
-  
   <div class="input-area">
     <div class="mic-icon">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -58,26 +46,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-  .suggestions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .chip {
-    background: transparent;
-    border: 1px solid rgba(0, 230, 255, 0.2);
-    color: var(--text-dim);
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-family: 'JetBrains Mono', monospace;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .chip:hover {
-    border-color: var(--pri);
-    color: var(--pri);
+    pointer-events: auto;
   }
   .input-area {
     display: flex;

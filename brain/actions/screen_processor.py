@@ -76,7 +76,12 @@ def _get_api_key() -> str:
 
 
 def _get_os() -> str:
-    return _load_config().get("os_system", "windows").lower()
+    if os_sys := _load_config().get("os_system"):
+        return os_sys.lower()
+
+    if sys.platform == "darwin":
+        return "mac"
+    return "linux" if sys.platform.startswith("linux") else "windows"
 
 _LIVE_MODEL         = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 _CHANNELS           = 1
@@ -347,6 +352,7 @@ class _VisionSession:
                 logger.info(f"Sent {len(image_bytes):,} bytes — '{user_text[:60]}'")
             except Exception as e:
                 logger.exception("An error occurred")
+                raise
 
     async def _recv_loop(self) -> None:
         transcript: list[str] = []
@@ -375,21 +381,36 @@ class _VisionSession:
         except Exception as e:
             logger.exception("An error occurred")
             raise  
+            
+        raise ConnectionError("Receive loop exited cleanly, session closed.")
 
     async def _play_loop(self) -> None:
         try:
+            buffer = bytearray()
+            buf_lock = threading.Lock()
+
+            def audio_cb(outdata, frames, time, status):
+                needed = len(outdata)
+                with buf_lock:
+                    if len(buffer) >= needed:
+                        outdata[:] = buffer[:needed]
+                        del buffer[:needed]
+                    else:
+                        outdata[:len(buffer)] = buffer
+                        outdata[len(buffer):] = b'\x00' * (needed - len(buffer))
+                        buffer.clear()
+
             with sd.RawOutputStream(
                 samplerate=_RECEIVE_SAMPLE_RATE,
                 channels=_CHANNELS,
                 dtype="int16",
                 blocksize=_CHUNK_SIZE,
+                callback=audio_cb
             ) as stream:
                 while True:
                     chunk = await self._audio_in.get()
-                    try:
-                        await asyncio.to_thread(stream.write, chunk)
-                    except Exception as write_err:
-                        logger.warning(f"Play write error (ignored): {write_err}")
+                    with buf_lock:
+                        buffer.extend(chunk)
         except Exception as e:
             logger.exception("An error occurred")
             raise

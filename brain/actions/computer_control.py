@@ -45,7 +45,13 @@ def _load_config() -> dict:
         return {}
 
 def _get_os() -> str:
-    return _load_config().get("os_system", "windows").lower()
+    if os_sys := _load_config().get("os_system"):
+        return os_sys.lower()
+
+    import sys
+    if sys.platform == "darwin":
+        return "mac"
+    return "linux" if sys.platform.startswith("linux") else "windows"
 
 
 def _get_api_key() -> str:
