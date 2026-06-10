@@ -39,3 +39,10 @@ brain/wakeword_models/
 # Databases
 *.db
 *.sqlite
+
+# Test files
+test_*.py
+
+# User Memory & Config
+brain/memory/long_term.json
+brain/config/hardware_config.json
