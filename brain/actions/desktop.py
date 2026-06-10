@@ -28,7 +28,7 @@ def _get_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 def _get_api_key() -> str:
-    path = _get_base_dir() / "config" / "api_keys.json"
+    path = _get_base_dir() / "config" / "hardware_config.json"
     with open(path, "r", encoding="utf-8") as f:
         return os.environ.get("GEMINI_API_KEY")
     

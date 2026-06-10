@@ -6,7 +6,7 @@ from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-_CONFIG_PATH = Path(__file__).parent / "api_keys.json"
+_CONFIG_PATH = Path(__file__).parent / "hardware_config.json"
 
 def get_config() -> dict:
     return {}

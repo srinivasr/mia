@@ -8,10 +8,13 @@ import subprocess
 import sys
 import time
 import random
+import shutil
 from pathlib import Path
 
 from utils.logger import setup_logger
 logger = setup_logger(__name__)
+
+_HAS_WTYPE = bool(shutil.which("wtype"))
 
 
 try:
@@ -35,7 +38,7 @@ def _base_dir() -> Path:
 
 
 _BASE         = _base_dir()
-_CONFIG_PATH  = _BASE / "config" / "api_keys.json"
+_CONFIG_PATH  = _BASE / "config" / "hardware_config.json"
 _MEMORY_PATH  = _BASE / "memory" / "long_term.json"
 
 def _load_config() -> dict:
@@ -154,10 +157,24 @@ def _user_profile() -> dict:
         pass
     return {}
 
+def _paste():
+    os_name = _get_os()
+    if os_name == "mac":
+        pyautogui.hotkey("command", "v")
+    elif os_name == "linux" and _HAS_WTYPE:
+        subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=False)
+    else:
+        pyautogui.hotkey("ctrl", "v")
+
 def _type(text: str, interval: float = 0.03) -> str:
     _require_pyautogui()
     time.sleep(0.3)
-    pyautogui.typewrite(text, interval=interval)
+    if _PYPERCLIP:
+        pyperclip.copy(str(text))
+        time.sleep(0.15)
+        _paste()
+    else:
+        pyautogui.typewrite(text, interval=interval)
     return f"Typed: {text[:60]}{'…' if len(text) > 60 else ''}"
 
 
@@ -167,10 +184,10 @@ def _smart_type(text: str, clear_first: bool = True) -> str:
         _clear_field()
         time.sleep(0.1)
 
-    if len(text) > 20 and _PYPERCLIP:
-        pyperclip.copy(text)
+    if _PYPERCLIP:
+        pyperclip.copy(str(text))
         time.sleep(0.1)
-        pyautogui.hotkey("ctrl", "v")
+        _paste()
         return f"Smart-typed (clipboard): {text[:60]}{'…' if len(text) > 60 else ''}"
 
     pyautogui.typewrite(text, interval=0.04)
@@ -232,7 +249,7 @@ def _clipboard_paste(text: str) -> str:
         pyperclip.copy(text)
         time.sleep(0.1)
         _require_pyautogui()
-        pyautogui.hotkey("ctrl", "v")
+        _paste()
         return f"Pasted: {text[:60]}{'…' if len(text) > 60 else ''}"
     return "pyperclip not available"
 
