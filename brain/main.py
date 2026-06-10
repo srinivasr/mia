@@ -54,7 +54,7 @@ def get_base_dir():
 
 BASE_DIR            = get_base_dir()
 PROMPT_PATH         = BASE_DIR / "core" / "prompt.txt"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+LIVE_MODEL          = "models/gemini-3.1-flash-live-preview"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -559,10 +559,7 @@ class MiaLive:
             return
         log_message(self.session_id, "user", text)
         asyncio.run_coroutine_threadsafe(
-            self.session.send_client_content(
-                turns={"parts": [{"text": text}]},
-                turn_complete=True
-            ),
+            self.session.send_realtime_input(text=text),
             self._loop
         )
 
@@ -578,10 +575,7 @@ class MiaLive:
         if not self._loop or not self.session:
             return
         asyncio.run_coroutine_threadsafe(
-            self.session.send_client_content(
-                turns={"parts": [{"text": text}]},
-                turn_complete=True
-            ),
+            self.session.send_realtime_input(text=text),
             self._loop
         )
 
@@ -773,7 +767,9 @@ class MiaLive:
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
-            await self.session.send_realtime_input(media=msg)
+            await self.session.send_realtime_input(
+                audio=types.Blob(data=msg["data"], mime_type="audio/pcm;rate=16000")
+            )
 
     async def _listen_audio(self):
         logger.info(f"Mic started (Continuous)")
@@ -1021,6 +1017,8 @@ class MiaLive:
                 traceback.print_exc()
                 
             self.set_speaking(False)
+            logger.info("Reconnecting in 2 seconds...")
+            await asyncio.sleep(2)
 
 
 async def _run_all():
