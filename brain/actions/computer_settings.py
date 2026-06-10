@@ -6,10 +6,13 @@ import sys
 import time
 import subprocess
 import platform
+import shutil
 from pathlib import Path
 
 from utils.logger import setup_logger
 logger = setup_logger(__name__)
+
+_HAS_WTYPE = bool(shutil.which("wtype"))
 
 
 try:
@@ -35,7 +38,7 @@ def _get_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 def _get_api_key() -> str:
-    path = _get_base_dir() / "config" / "api_keys.json"
+    path = _get_base_dir() / "config" / "hardware_config.json"
     with open(path, "r", encoding="utf-8") as f:
         return os.environ.get("GEMINI_API_KEY")
 
@@ -320,8 +323,12 @@ def copy():
     else:               pyautogui.hotkey("ctrl", "c")
 
 def paste():
-    if _OS == "Darwin": pyautogui.hotkey("command", "v")
-    else:               pyautogui.hotkey("ctrl", "v")
+    if _OS == "Darwin":
+        pyautogui.hotkey("command", "v")
+    elif _OS == "Linux" and _HAS_WTYPE:
+        subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=False)
+    else:
+        pyautogui.hotkey("ctrl", "v")
 
 def cut():
     if _OS == "Darwin": pyautogui.hotkey("command", "x")

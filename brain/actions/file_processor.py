@@ -30,7 +30,7 @@ logger = setup_logger(__name__)
 
 
 def _get_api_key() -> str:
-    config_path = Path(__file__).resolve().parent.parent / "config" / "api_keys.json"
+    config_path = Path(__file__).resolve().parent.parent / "config" / "hardware_config.json"
     with open(config_path, "r", encoding="utf-8") as f:
         return os.environ.get("GEMINI_API_KEY")
 

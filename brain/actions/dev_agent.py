@@ -18,7 +18,7 @@ def get_base_dir():
 
 
 BASE_DIR         = get_base_dir()
-API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH  = BASE_DIR / "config" / "hardware_config.json"
 PROJECTS_DIR     = Path.home() / "Desktop" / "MiaProjects"
 MAX_FIX_ATTEMPTS = 5
 MODEL_PLANNER    = "gemini-2.5-flash"
