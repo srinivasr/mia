@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import base64
+
 import io
 import json
 import os
@@ -83,7 +83,7 @@ def _get_os() -> str:
         return "mac"
     return "linux" if sys.platform.startswith("linux") else "windows"
 
-_LIVE_MODEL         = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+_LIVE_MODEL         = "models/gemini-3.1-flash-live-preview"
 _CHANNELS           = 1
 _RECEIVE_SAMPLE_RATE = 24_000
 _CHUNK_SIZE         = 1_024
@@ -259,16 +259,11 @@ class _VisionSession:
                 logger.info(f"No session — dropping image")
                 continue
             try:
-                b64 = base64.b64encode(image_bytes).decode("ascii")
-                await self._session.send_client_content(
-                    turns={
-                        "parts": [
-                            {"inline_data": {"mime_type": mime_type, "data": b64}},
-                            {"text": user_text},
-                        ]
-                    },
-                    turn_complete=True,
+                await self._session.send_realtime_input(
+                    video=gtypes.Blob(data=image_bytes, mime_type=mime_type)
                 )
+                if user_text:
+                    await self._session.send_realtime_input(text=user_text)
                 logger.info(f"Sent {len(image_bytes):,} bytes — '{user_text[:60]}'")
             except Exception as e:
                 logger.exception("An error occurred")
