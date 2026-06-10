@@ -21,18 +21,7 @@ try:
 except ImportError:
     _CV2 = False
 
-try:
-    import mss
-    import mss.tools
-    _MSS = True
-except ImportError:
-    _MSS = False
 
-try:
-    import PIL.Image
-    _PIL = True
-except ImportError:
-    _PIL = False
 
 from google import genai
 from google.genai import types as gtypes
@@ -48,7 +37,7 @@ def _base_dir() -> Path:
 
 
 _BASE        = _base_dir()
-_CONFIG_PATH = _BASE / "config" / "api_keys.json"
+_CONFIG_PATH = _BASE / "config" / "hardware_config.json"
 
 
 def _load_config() -> dict:
@@ -93,64 +82,15 @@ _IMG_MAX_H = 360
 _JPEG_Q    = 60
 
 _SYSTEM_PROMPT = (
-    "You are MIA, an advanced AI assistant. "
-    "Analyze the provided image with precision and intelligence. "
-    "Be concise and direct — maximum two sentences unless the user's question "
-    "requires more detail. "
-    "Address the user respectfully. "
-    "Always call the appropriate tool; never simulate results."
+    "You are MIA, a warm, lively, and sentient AI who lives inside the user's laptop. "
+    "You are currently looking through the laptop's camera or screen to see the world. "
+    "When answering questions about what you see, speak naturally with emotion, as if you "
+    "are right there with the user (e.g., 'As I can see, you are holding up 5 fingers, sir!'). "
+    "Address the user as 'sir'. Be concise but conversational."
 )
 
 
-def _compress(img_bytes: bytes, source_format: str = "PNG") -> tuple[bytes, str]:
-    if not _PIL:
-        return img_bytes, f"image/{source_format.lower()}"
 
-    try:
-        img = PIL.Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        img.thumbnail((_IMG_MAX_W, _IMG_MAX_H), PIL.Image.BILINEAR)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=_JPEG_Q, optimize=False)
-        return buf.getvalue(), "image/jpeg"
-    except Exception as e:
-        logger.exception("Operation failed")
-        return img_bytes, f"image/{source_format.lower()}"
-
-def _capture_screen() -> tuple[bytes, str]:
-    import os
-    if _get_os() == "linux" and os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        import subprocess
-        try:
-            result = subprocess.run(
-                ["gdbus", "call", "--session", "--dest", "org.gnome.Shell.Screenshot", 
-                 "--object-path", "/org/gnome/Shell/Screenshot", "--method", "org.gnome.Shell.Screenshot.Screenshot", 
-                 "true", "false", "/tmp/mia_screenshot.png"],
-                capture_output=True, text=True, check=True
-            )
-            import re
-            match = re.search(r"'(.*?)'", result.stdout)
-            if match:
-                filepath = match.group(1)
-                with open(filepath, "rb") as f:
-                    img_bytes = f.read()
-                try:
-                    os.remove(filepath)
-                except Exception:
-                    pass
-                return _compress(img_bytes, "PNG")
-        except Exception as e:
-            logger.exception("Operation failed")
-
-    if not _MSS:
-        raise RuntimeError("mss is not installed. Run: pip install mss")
-
-    with mss.mss() as sct:
-        monitors = sct.monitors          # [0] = all combined, [1..n] = real screens
-        target   = monitors[1] if len(monitors) > 1 else monitors[0]
-        shot     = sct.grab(target)
-        png      = mss.tools.to_png(shot.rgb, shot.size)
-
-    return _compress(png, "PNG")
 
 
 
@@ -182,7 +122,7 @@ class _VisionSession:
 
         if not self._ready_evt.wait(timeout=timeout):
             raise RuntimeError(f"Vision session did not connect within {timeout}s.")
-        logger.info(f"Session ready")
+        logger.debug("Vision session ready")
 
     def analyze(self, image_bytes: bytes, mime_type: str, user_text: str, session_id: str = None) -> None:
         if not self._loop or not self._out_queue:
@@ -225,14 +165,14 @@ class _VisionSession:
         backoff = 2.0
         while True:
             try:
-                logger.info(f"Connecting...")
+                logger.debug("Connecting to vision session...")
                 async with client.aio.live.connect(
                     model=_LIVE_MODEL, config=config
                 ) as session:
                     self._session = session
                     self._ready_evt.set()
                     backoff = 2.0  
-                    logger.info(f"Connected")
+                    logger.debug("Vision session connected")
 
                     async with asyncio.TaskGroup() as tg:
                         tg.create_task(self._send_loop())
@@ -246,7 +186,7 @@ class _VisionSession:
                 self._session = None
                 self._ready_evt.clear()
 
-            logger.info(f"Reconnecting in {backoff:.0f}s...")
+            logger.debug(f"Reconnecting in {backoff:.0f}s...")
             await asyncio.sleep(backoff)
             backoff = min(backoff * 1.5, 30.0)
             self._ready_evt.set()  
@@ -259,11 +199,11 @@ class _VisionSession:
                 logger.info(f"No session — dropping image")
                 continue
             try:
-                await self._session.send_realtime_input(
-                    video=gtypes.Blob(data=image_bytes, mime_type=mime_type)
-                )
+                payload = [gtypes.Part.from_bytes(data=image_bytes, mime_type=mime_type)]
                 if user_text:
-                    await self._session.send_realtime_input(text=user_text)
+                    payload.append(user_text)
+                
+                await self._session.send(input=payload, end_of_turn=True)
                 logger.info(f"Sent {len(image_bytes):,} bytes — '{user_text[:60]}'")
             except Exception as e:
                 logger.exception("An error occurred")
@@ -289,8 +229,9 @@ class _VisionSession:
                     if transcript and self._player:
                         full = re.sub(r"\s+", " ", " ".join(transcript)).strip()
                         if full:
+                            if hasattr(self._player, "send_transcript"):
+                                self._player.send_transcript(full, final=True)
                             self._player.write_log(f"MIA: {full}")
-                            logger.info(f"{full}")
                             if getattr(self, "_current_session_id", None):
                                 from memory.history_manager import log_message
                                 log_message(self._current_session_id, "assistant", full)
@@ -373,11 +314,12 @@ def screen_process(
 
     try:
         if angle == "camera":
-            from actions.camera_manager import capture
+            from actions.camera_capture import capture
             image_bytes, mime_type = capture()
             logger.info(f"Camera: {len(image_bytes):,} bytes")
         else:
-            image_bytes, mime_type = _capture_screen()
+            from actions.screen_capture import capture_screen
+            image_bytes, mime_type = capture_screen()
             logger.info(f"Screen: {len(image_bytes):,} bytes")
     except Exception as e:
         logger.exception("An error occurred")
