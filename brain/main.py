@@ -34,7 +34,7 @@ from actions.weather_report    import weather_action
 from actions.send_message      import send_message
 from actions.reminder          import reminder
 from actions.computer_settings import computer_settings
-from actions.screen_processor  import screen_process
+from actions.vision_module  import screen_process
 from actions.youtube_video     import youtube_video
 from actions.desktop           import desktop_control
 from actions.browser_control   import browser_control
@@ -518,6 +518,8 @@ _CTRL_RE = re.compile(r"<ctrl\d+>", re.IGNORECASE)
 def _clean_transcript(text: str) -> str:
     text = _CTRL_RE.sub("", text)
     text = re.sub(r"[\x00-\x08\x0b-\x1f]", "", text)
+    # Gemini occasionally prepends this fallback string
+    text = re.sub(r"(?i)\btext response\b", "", text)
     return text.strip()
 
 
@@ -644,36 +646,29 @@ class MiaLive:
             )
 
         loop   = asyncio.get_event_loop()
-        result = "Done."
+        result = ""
 
         try:
             if name == "open_app":
-                r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
-                result = r or f"Opened {args.get('app_name')}."
+                result = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
 
             elif name == "weather_report":
-                r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
-                result = r or "Weather delivered."
+                result = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
 
             elif name == "browser_control":
-                r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
 
             elif name == "file_controller":
-                r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
 
             elif name == "send_message":
-                r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
-                result = r or f"Message sent to {args.get('receiver')}."
+                result = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
 
             elif name == "reminder":
-                r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
-                result = r or "Reminder set."
+                result = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
 
             elif name == "youtube_video":
-                r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
 
             elif name == "screen_process":
                 threading.Thread(
@@ -682,60 +677,48 @@ class MiaLive:
                             "player": self.ui, "session_id": self.session_id},
                     daemon=True
                 ).start()
-                result = "Vision module activated. Stay completely silent — vision module will speak directly."
 
             elif name == "computer_settings":
-                r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
 
             elif name == "desktop_control":
-                r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
 
             elif name == "code_helper":
-                r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
 
             elif name == "dev_agent":
-                r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
 
             elif name == "agent_task":
                 from agent.task_queue import get_queue, TaskPriority
                 priority_map = {"low": TaskPriority.LOW, "normal": TaskPriority.NORMAL, "high": TaskPriority.HIGH}
                 priority = priority_map.get(args.get("priority", "normal").lower(), TaskPriority.NORMAL)
                 task_id  = get_queue().submit(goal=args.get("goal", ""), priority=priority, speak=self.speak)
-                result   = f"Task started (ID: {task_id})."
 
             elif name == "web_search":
-                r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
 
             elif name == "file_processor":
                 if not args.get("file_path") and self.ui.current_file:
                     args["file_path"] = self.ui.current_file
-                r = await loop.run_in_executor(
+                result = await loop.run_in_executor(
                     None,
                     lambda: file_processor(parameters=args, player=self.ui, speak=self.speak)
                 )
-                result = r or "Done."
 
             elif name == "computer_control":
-                r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
 
             elif name == "game_updater":
-                r = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
 
             elif name == "flight_finder":
-                r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
-                result = r or "Done."
+                result = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
 
             elif name == "open_world_monitor":
                 url = args.get("url", "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks")
                 self.ui.send_open_url(url)
-                result = "World Monitor opened in browser."
 
             elif name == "shutdown_mia":
                 self.ui.write_log("SYS: Shutdown requested.")
@@ -745,9 +728,13 @@ class MiaLive:
                     time.sleep(1)
                     os._exit(0)
                 threading.Thread(target=_shutdown, daemon=True).start()
+                result = "Shutting down."
 
             else:
-                result = f"Unknown tool: {name}"
+                logger.info(f"Unknown tool: {name}")
+                result = f"Unknown tool '{name}'."
+
+            result = result or ""
 
         except Exception as e:
             result = f"Tool '{name}' failed: {e}"
@@ -799,10 +786,8 @@ class MiaLive:
                         text = res.get("partial", "")
 
                 if text.strip():
-                    # Debug print so we can see what Vosk is actually hearing
                     print(f"VOSK HEARD: '{text}'")
 
-                # Broadened regex to catch common misspellings of 'mia'
                 if re.search(r'\b(mia|mya|maya|me a|mi a|hey a)\b', text.lower()) or "hey mia" in text.lower():
                     logger.info(f"WAKE WORD DETECTED IN: '{text}'")
                     def _wake():
@@ -965,7 +950,6 @@ class MiaLive:
             http_options={"api_version": "v1beta"}
         )
         
-        # Start mic listener independently
         asyncio.create_task(self._listen_audio())
 
         while True:
@@ -1003,18 +987,18 @@ class MiaLive:
 
                     if not self._introduced:
                         self._introduced = True
-                        # Small delay so audio pipeline is fully ready before speaking
                         await asyncio.sleep(0.5)
                         self.speak("Hello boss, what are you up to?")
 
-                    # Keep connection alive indefinitely
                     while True:
                         await asyncio.sleep(1.0)
 
             except* Exception as eg:
                 for exc in eg.exceptions:
                     logger.info(f"Session error: {exc}")
-                traceback.print_exc()
+                
+                if not any("1008" in str(e) for e in eg.exceptions):
+                    traceback.print_exc()
                 
             self.set_speaking(False)
             logger.info("Reconnecting in 2 seconds...")

@@ -30,7 +30,7 @@ JPEG_QUALITY = 60
 
 def _get_config_path() -> Path:
     base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
-    return base / "config" / "api_keys.json"
+    return base / "config" / "hardware_config.json"
 
 def _read_config() -> dict:
     try:

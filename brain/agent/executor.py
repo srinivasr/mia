@@ -33,7 +33,7 @@ def get_base_dir() -> Path:
 
 
 BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH = BASE_DIR / "config" / "hardware_config.json"
 
 
 def _get_api_key() -> str:
@@ -193,7 +193,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         return dev_agent(parameters=parameters, player=None, speak=speak) or "Done."
 
     elif tool == "screen_process":
-        from actions.screen_processor import screen_process
+        from actions.vision_module import screen_process
         screen_process(parameters=parameters, player=None)
         return "Screen captured and analyzed."
 

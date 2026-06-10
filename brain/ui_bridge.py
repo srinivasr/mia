@@ -429,7 +429,7 @@ class UIBridge:
         
         # Start camera thread and register callback to stream frames
         try:
-            from actions.camera_manager import on_new_frame, start_feed
+            from actions.camera_capture import on_new_frame, start_feed
             on_new_frame(self.send_camera_frame)
             start_feed()
         except Exception as e:
