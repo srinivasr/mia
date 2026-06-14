@@ -154,6 +154,48 @@ def _firefox_profile_dir() -> Optional[str]:
         return default_path
     return None
 
+
+def _zen_profile_dir() -> Optional[str]:
+    home = Path.home()
+    if _OS == "Linux":
+        base = home / ".zen"
+    elif _OS == "Darwin":
+        base = home / "Library" / "Application Support" / "zen"
+    elif _OS == "Windows":
+        base = Path(os.environ.get("APPDATA", "")) / "zen"
+    else:
+        return None
+
+    ini = base / "profiles.ini"
+    if not ini.exists():
+        return None
+
+    current: dict[str, str] = {}
+    default_path: Optional[str] = None
+
+    for line in ini.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            p = current.get("Path", "")
+            if p and current.get("Default") == "1":
+                is_rel = current.get("IsRelative", "1") == "1"
+                default_path = str(base / p) if is_rel else p
+            current = {}
+        elif "=" in line:
+            k, _, v = line.partition("=")
+            current[k.strip()] = v.strip()
+
+    p = current.get("Path", "")
+    if p and current.get("Default") == "1":
+        is_rel = current.get("IsRelative", "1") == "1"
+        default_path = str(base / p) if is_rel else p
+
+    if default_path and Path(default_path).exists():
+        logger.info(f"Zen real profile: {default_path}")
+        return default_path
+    return None
+
+
 def _find_opera_windows() -> Optional[str]:
     local  = os.environ.get("LOCALAPPDATA", "")
     prog   = os.environ.get("PROGRAMFILES", "")
@@ -244,6 +286,7 @@ _BROWSER_SPECS: dict[str, dict] = {
         "edge":     {"engine": "chromium", "channel": None,
                      "bins": ["microsoft-edge", "microsoft-edge-stable"]},
         "firefox":  {"engine": "firefox",  "channel": None, "bins": ["firefox"]},
+        "zen":      {"engine": "firefox",  "channel": None, "bins": ["zen-browser", "zen"]},
         "opera":    {"engine": "chromium", "channel": None, "bins": ["opera", "opera-stable"]},
         "operagx":  {"engine": "chromium", "channel": None, "bins": ["opera", "opera-stable"]},
         "brave":    {"engine": "chromium", "channel": None, "bins": ["brave-browser", "brave"]},
@@ -259,6 +302,8 @@ _ALIASES: dict[str, str] = {
     "ms edge":         "edge",
     "msedge":          "edge",
     "mozilla firefox": "firefox",
+    "zen browser":     "zen",
+    "zen-browser":     "zen",
     "opera gx":        "operagx",
     "opera_gx":        "operagx",
 }
@@ -340,7 +385,7 @@ def _detect_default_browser() -> str:
                 ["xdg-settings", "get", "default-web-browser"],
                 capture_output=True, text=True, timeout=5,
             ).stdout.lower()
-            for kw in ("firefox", "opera", "brave", "vivaldi", "chrome", "edge"):
+            for kw in ("firefox", "zen", "opera", "brave", "vivaldi", "chrome", "edge"):
                 if kw in out:
                     return kw
     except Exception:
@@ -427,6 +472,22 @@ class _BrowserSession:
         exe         = self._spec["exe"]
         channel     = self._spec["channel"]
         engine_obj  = getattr(self._pw, engine_name)
+
+        if self.browser_name == "zen":
+            profile = str(Path.home() / ".mia_profiles" / "zen")
+            Path(profile).mkdir(parents=True, exist_ok=True)
+            kwargs: dict = {
+                "headless":    False,
+                "slow_mo":     0,
+                "viewport":    None,
+                "no_viewport": True,
+            }
+            engine_obj = self._pw.firefox
+            self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
+            await asyncio.sleep(0.5)
+            self._page = await self._context.new_page()
+            logger.info("Zen launched (via Playwright Firefox)")
+            return
 
         if engine_name == "firefox":
             profile = _firefox_profile_dir() or str(
@@ -519,9 +580,14 @@ class _BrowserSession:
 
     async def _get_page(self) -> Page:
         await self._launch()
-        # If somehow page got closed, open a fresh one
         if self._page is None or self._page.is_closed():
-            self._page = await self._context.new_page()
+            try:
+                self._page = await self._context.new_page()
+            except Exception:
+                self._context = None
+                self._page = None
+                await self._launch()
+                self._page = await self._context.new_page()
             await asyncio.sleep(0.2)
         return self._page
 
@@ -611,7 +677,9 @@ class _BrowserSession:
         except Exception as e:
             return f"Key error: {e}"
 
-    async def get_text(self) -> str:
+    async def get_text(self, url: str = None) -> str:
+        if url:
+            await self.go_to(url)
         page = await self._get_page()
         try:
             text = await page.inner_text("body")
@@ -869,7 +937,7 @@ def browser_control(
         elif action == "smart_type":
             result = sess.run(sess.smart_type(params.get("description", ""), params.get("text", "")))
         elif action == "get_text":
-            result = sess.run(sess.get_text())
+            result = sess.run(sess.get_text(params.get("url")))
         elif action == "get_url":
             result = sess.run(sess.get_url())
         elif action == "press":
