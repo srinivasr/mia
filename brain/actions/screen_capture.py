@@ -62,33 +62,67 @@ def _compress(img_bytes: bytes, source_format: str = "PNG") -> tuple[bytes, str]
         logger.exception("Operation failed")
         return img_bytes, f"image/{source_format.lower()}"
 
+_SCREENSHOT_PATH = "/tmp/mia_screenshot.png"
+
+
+def _try_spectacle() -> bytes | None:
+    try:
+        subprocess.run(
+            ["spectacle", "-b", "-n", "-o", _SCREENSHOT_PATH],
+            capture_output=True, timeout=10, check=True
+        )
+        with open(_SCREENSHOT_PATH, "rb") as f:
+            return f.read()
+    except Exception:
+        return None
+
+
+def _try_grim() -> bytes | None:
+    try:
+        subprocess.run(
+            ["grim", _SCREENSHOT_PATH],
+            capture_output=True, timeout=10, check=True
+        )
+        with open(_SCREENSHOT_PATH, "rb") as f:
+            return f.read()
+    except Exception:
+        return None
+
+
+def _try_gnome_dbus() -> bytes | None:
+    try:
+        result = subprocess.run(
+            ["gdbus", "call", "--session", "--dest", "org.gnome.Shell.Screenshot",
+             "--object-path", "/org/gnome/Shell/Screenshot",
+             "--method", "org.gnome.Shell.Screenshot.Screenshot",
+             "true", "false", _SCREENSHOT_PATH],
+            capture_output=True, text=True, timeout=10, check=True
+        )
+        match = re.search(r"'(.*?)'", result.stdout)
+        if match:
+            filepath = match.group(1)
+            with open(filepath, "rb") as f:
+                return f.read()
+    except Exception:
+        return None
+
+
 def capture_screen() -> tuple[bytes, str]:
-    if _get_os() == "linux" and os.environ.get("XDG_SESSION_TYPE") == "wayland":
-        try:
-            result = subprocess.run(
-                ["gdbus", "call", "--session", "--dest", "org.gnome.Shell.Screenshot", 
-                 "--object-path", "/org/gnome/Shell/Screenshot", "--method", "org.gnome.Shell.Screenshot.Screenshot", 
-                 "true", "false", "/tmp/mia_screenshot.png"],
-                capture_output=True, text=True, check=True
-            )
-            match = re.search(r"'(.*?)'", result.stdout)
-            if match:
-                filepath = match.group(1)
-                with open(filepath, "rb") as f:
-                    img_bytes = f.read()
+    if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        for attempt in (_try_spectacle, _try_grim, _try_gnome_dbus):
+            img = attempt()
+            if img and len(img) > 1024:
                 try:
-                    os.remove(filepath)
+                    Path(_SCREENSHOT_PATH).unlink(missing_ok=True)
                 except Exception:
                     pass
-                return _compress(img_bytes, "PNG")
-        except Exception as e:
-            logger.exception("Operation failed")
+                return _compress(img, "PNG")
 
     if not _MSS:
         raise RuntimeError("mss is not installed. Run: pip install mss")
 
     with mss.mss() as sct:
-        monitors = sct.monitors          # [0] = all combined, [1..n] = real screens
+        monitors = sct.monitors
         target   = monitors[1] if len(monitors) > 1 else monitors[0]
         shot     = sct.grab(target)
         png      = mss.tools.to_png(shot.rgb, shot.size)

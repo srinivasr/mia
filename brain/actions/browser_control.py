@@ -810,6 +810,7 @@ def browser_control(
     response=None,
     player=None,
     session_memory=None,
+    progress=None,
 ) -> str:
     params  = parameters or {}
     action  = params.get("action", "").lower().strip()
@@ -832,6 +833,9 @@ def browser_control(
         _log(player, result)
         return result
 
+    if progress:
+        progress(20, "Starting browser session...")
+
     try:
         sess = _registry.get(browser)
     except Exception as e:
@@ -839,10 +843,17 @@ def browser_control(
         _log(player, result)
         return result
 
+    if progress:
+        progress(40, "Browser ready")
+
     try:
         if action == "go_to":
+            if progress:
+                progress(50, f"Navigating to {params.get('url', '')[:50]}...")
             result = sess.run(sess.go_to(params.get("url", "")))
         elif action == "search":
+            if progress:
+                progress(50, f"Searching for '{params.get('query', '')[:50]}'...")
             result = sess.run(sess.search(params.get("query", ""), params.get("engine", "google")))
         elif action == "click":
             result = sess.run(sess.click(params.get("selector"), params.get("text")))

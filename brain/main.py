@@ -44,6 +44,10 @@ from actions.dev_agent         import dev_agent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
+from actions.web_scraper       import fetch_url as fetch_url_action
+from actions.web_scraper       import scrape_url as scrape_url_action
+from actions.web_scraper       import save_content as save_content_action
+from actions.progress_popup    import ProgressPopup
 
 
 def get_base_dir():
@@ -227,7 +231,7 @@ TOOL_DECLARATIONS = [
             "type": "OBJECT",
             "properties": {
                 "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"},
-                "browser":     {"type": "STRING", "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the currently active browser."},
+                "browser":     {"type": "STRING", "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari | zen. Omit to use the currently active browser."},
                 "url":         {"type": "STRING", "description": "URL for go_to / new_tab action"},
                 "query":       {"type": "STRING", "description": "Search query for search action"},
                 "engine":      {"type": "STRING", "description": "Search engine: google | bing | duckduckgo | yandex (default: google)"},
@@ -498,6 +502,45 @@ TOOL_DECLARATIONS = [
 
     },
     {
+        "name": "fetch_url",
+        "description": "Fetches a URL and extracts clean readable content (articles, blogs, docs, web pages). Handles JavaScript-rendered pages automatically.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url":    {"type": "STRING", "description": "Full URL to fetch (including https://)"},
+                "format": {"type": "STRING", "description": "Output format: 'text' (default) or 'markdown'"},
+                "mode":   {"type": "STRING", "description": "Extraction mode: 'article' (main content only, default), 'full' (all visible text), 'raw' (raw body text)"}
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "scrape_url",
+        "description": "Extracts specific structured data from a URL using CSS selectors. Use for product prices, table data, listings, or any targeted extraction from a page.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url":       {"type": "STRING", "description": "Full URL to scrape (including https://)"},
+                "selectors": {"type": "STRING", "description": "JSON object mapping field names to CSS selectors. Example: {\"price\": \".product-price\", \"name\": \"h1.title\"}"},
+                "attribute": {"type": "STRING", "description": "What to extract: 'text' (inner text, default), 'html' (inner HTML), 'src' (image src), 'href' (link url)"}
+            },
+            "required": ["url", "selectors"]
+        }
+    },
+    {
+        "name": "save_content",
+        "description": "Saves text content (scraped data, notes, results, generated content) to a file for later reference.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "filename": {"type": "STRING", "description": "Filename without extension (e.g. 'article-about-ai')"},
+                "content":  {"type": "STRING", "description": "The text content to save"},
+                "format":   {"type": "STRING", "description": "File format: 'txt' (default), 'md' (markdown), 'html'"}
+            },
+            "required": ["filename", "content"]
+        }
+    },
+    {
         "name": "open_world_monitor",
         "description": "Opens the World Monitor website showing global news, conflicts, and events on an interactive 3D globe. Use when the user asks about world news, global events, Indian headlines, or current affairs. After calling this, the assistant UI minimizes to a small orb. The URL is: https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks",
         "parameters": {
@@ -656,7 +699,11 @@ class MiaLive:
                 result = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
 
             elif name == "browser_control":
-                result = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
+                popup = ProgressPopup("Browser", f"Opening {args.get('browser', 'browser')}...")
+                try:
+                    result = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui, progress=popup.update))
+                finally:
+                    popup.close()
 
             elif name == "file_controller":
                 result = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
@@ -715,6 +762,34 @@ class MiaLive:
 
             elif name == "flight_finder":
                 result = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
+
+            elif name == "fetch_url":
+                url = args.get("url", "")
+                popup = ProgressPopup("Web Scraper", f"Fetching {url[:50]}...")
+                try:
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda: fetch_url_action(parameters=args, player=self.ui, progress=popup.update)
+                    )
+                finally:
+                    popup.close()
+
+            elif name == "scrape_url":
+                url = args.get("url", "")
+                popup = ProgressPopup("Web Scraper", f"Scraping {url[:50]}...")
+                try:
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda: scrape_url_action(parameters=args, player=self.ui, progress=popup.update)
+                    )
+                finally:
+                    popup.close()
+
+            elif name == "save_content":
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: save_content_action(parameters=args, player=self.ui)
+                )
 
             elif name == "open_world_monitor":
                 url = args.get("url", "https://www.worldmonitor.app/?lat=22.4589&lon=82.7533&zoom=3.01&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks")
