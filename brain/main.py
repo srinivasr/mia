@@ -688,6 +688,18 @@ class MiaLive:
                 response={"result": "ok", "silent": True}
             )
 
+        if name == "end_conversation":
+            self.wakeword_active = False
+            if self.ui.require_wake_word:
+                self.ui.set_state("IDLE")
+                self.ui.write_log("SYS: Zzz... (Conversation ended by Mia)")
+            else:
+                self.ui.write_log("SYS: Conversation ended, but listening continuously.")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": "Conversation ended."}
+            )
+
         loop   = asyncio.get_event_loop()
         result = ""
 
