@@ -25,8 +25,12 @@
   function startLaunchSequence() {
     launchLine = 1;
     launchTimers = [
-      setTimeout(() => { launchLine = 2; }, 1500),
-      setTimeout(() => { launchLine = 3; }, 3000),
+      setTimeout(() => {
+        launchLine = 2;
+      }, 1500),
+      setTimeout(() => {
+        launchLine = 3;
+      }, 3000),
     ];
   }
 
@@ -38,7 +42,12 @@
     }, 300);
   }
 
-  $: if ($setupStep === "launching" && launchReady && launchLine >= 3 && !flashTriggered) {
+  $: if (
+    $setupStep === "launching" &&
+    launchReady &&
+    launchLine >= 3 &&
+    !flashTriggered
+  ) {
     flashTriggered = true;
     triggerFlash();
   }
@@ -90,8 +99,8 @@
         });
         if (msg.configured && msg.key_valid) {
           // Key exists — skip API step, go straight to checks
-          setupStep.set('checks');
-          send({ type: 'run_checks' });
+          setupStep.set("checks");
+          send({ type: "run_checks" });
         } else {
           apiKey.set("");
           setupStep.set("api_key");
@@ -605,7 +614,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 0.85rem;
     color: var(--txt, #c0c0d0);
     cursor: pointer;

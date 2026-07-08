@@ -8,7 +8,6 @@
   import LoadingScreen from "./lib/components/LoadingScreen.svelte";
   import TimePanel from "./lib/components/TimePanel.svelte";
   import WeatherPanel from "./lib/components/WeatherPanel.svelte";
-  import ModulesPanel from "./lib/components/ModulesPanel.svelte";
   import CameraFeedPanel from "./lib/components/CameraFeedPanel.svelte";
   import ChatPanel from "./lib/components/ChatPanel.svelte";
 
@@ -150,7 +149,6 @@
         <TimePanel />
         <WeatherPanel />
         <MetricsPanel />
-        <ModulesPanel />
       </div>
 
       <div class="center-top">
