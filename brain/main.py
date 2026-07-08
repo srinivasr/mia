@@ -594,7 +594,11 @@ class MiaLive:
             vosk.SetLogLevel(-1)
             model_path = str(Path(__file__).parent / "vosk_model")
             self.vosk_model = vosk.Model(model_path)
-            self.vosk_rec = vosk.KaldiRecognizer(self.vosk_model, SEND_SAMPLE_RATE)
+            
+            # Constrain Vosk to a specific grammar for wake words to drastically improve accuracy
+            import json
+            grammar = json.dumps(["mia", "mya", "maya", "me", "mi", "a", "hey", "hi", "hello", "[unk]"])
+            self.vosk_rec = vosk.KaldiRecognizer(self.vosk_model, SEND_SAMPLE_RATE, grammar)
             logger.info("Vosk offline model loaded.")
         except Exception as e:
             logger.error(f"Failed to load vosk: {e}")
