@@ -618,7 +618,11 @@ class MiaLive:
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
-            self.ui.set_state("IDLE")
+            if self.ui.require_wake_word:
+                self.wakeword_active = False
+                self.ui.set_state("IDLE")
+            else:
+                self.ui.set_state("LISTENING")
 
     def speak(self, text: str):
         if not self._loop or not self.session:
@@ -944,7 +948,6 @@ class MiaLive:
                                 in_buf.append(txt)
 
                         if sc.turn_complete:
-                            self.ui.set_state("THINKING")
                             if self._turn_done_event:
                                 self._turn_done_event.set()
 
@@ -961,13 +964,14 @@ class MiaLive:
                                 log_message(self.session_id, "assistant", full_out)
                             out_buf = []
 
-                            if self.ui.require_wake_word:
-                                self.wakeword_active = False
-                                self.ui.set_state("IDLE")
-                                logger.info("Turn complete. Muting mic. Waiting for wake word.")
-                            else:
-                                self.ui.set_state("LISTENING")
-                                logger.info("Turn complete. Listening continuously.")
+                            if not self._is_speaking:
+                                if self.ui.require_wake_word:
+                                    self.wakeword_active = False
+                                    self.ui.set_state("IDLE")
+                                    logger.info("Turn complete. Muting mic. Waiting for wake word.")
+                                else:
+                                    self.ui.set_state("LISTENING")
+                                    logger.info("Turn complete. Listening continuously.")
 
                             if self.vosk_rec:
                                 with self.lock:
@@ -1017,8 +1021,12 @@ class MiaLive:
                         chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.02)
                     except asyncio.TimeoutError:
                         if self._turn_done_event and self._turn_done_event.is_set() and self.audio_in_queue.empty():
-                            self.set_speaking(False)
-                            self._turn_done_event.clear()
+                            # Wait for the hardware buffer to drain before ending speaking
+                            with buf_lock:
+                                buf_empty = len(buffer) == 0
+                            if buf_empty:
+                                self.set_speaking(False)
+                                self._turn_done_event.clear()
                         continue
                     
                     self.set_speaking(True)
