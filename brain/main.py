@@ -50,13 +50,9 @@ from actions.web_scraper       import save_content as save_content_action
 from actions.progress_popup    import ProgressPopup
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
+from utils.config import base_dir
 
-
-BASE_DIR            = get_base_dir()
+BASE_DIR            = base_dir()
 PROMPT_PATH         = BASE_DIR / "core" / "prompt.txt"
 LIVE_MODEL          = "models/gemini-3.1-flash-live-preview"
 CHANNELS            = 1
@@ -618,11 +614,7 @@ class MiaLive:
         if value:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
-            if self.ui.require_wake_word:
-                self.wakeword_active = False
-                self.ui.set_state("IDLE")
-            else:
-                self.ui.set_state("LISTENING")
+            self.ui.set_state("IDLE")
 
     def speak(self, text: str):
         if not self._loop or not self.session:
@@ -713,7 +705,7 @@ class MiaLive:
 
         try:
             if name == "open_app":
-                result = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
+                result = await loop.run_in_executor(None, lambda: open_app(parameters=args, player=self.ui))
 
             elif name == "weather_report":
                 result = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
@@ -729,24 +721,24 @@ class MiaLive:
                 result = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
 
             elif name == "send_message":
-                result = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
+                result = await loop.run_in_executor(None, lambda: send_message(parameters=args, player=self.ui))
 
             elif name == "reminder":
-                result = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
+                result = await loop.run_in_executor(None, lambda: reminder(parameters=args, player=self.ui))
 
             elif name == "youtube_video":
-                result = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
+                result = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, player=self.ui))
 
             elif name == "screen_process":
                 threading.Thread(
                     target=screen_process,
-                    kwargs={"parameters": args, "response": None,
+                    kwargs={"parameters": args,
                             "player": self.ui, "session_id": self.session_id},
                     daemon=True
                 ).start()
 
             elif name == "computer_settings":
-                result = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
+                result = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, player=self.ui))
 
             elif name == "desktop_control":
                 result = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
@@ -948,6 +940,7 @@ class MiaLive:
                                 in_buf.append(txt)
 
                         if sc.turn_complete:
+                            self.ui.set_state("THINKING")
                             if self._turn_done_event:
                                 self._turn_done_event.set()
 
@@ -964,14 +957,13 @@ class MiaLive:
                                 log_message(self.session_id, "assistant", full_out)
                             out_buf = []
 
-                            if not self._is_speaking:
-                                if self.ui.require_wake_word:
-                                    self.wakeword_active = False
-                                    self.ui.set_state("IDLE")
-                                    logger.info("Turn complete. Muting mic. Waiting for wake word.")
-                                else:
-                                    self.ui.set_state("LISTENING")
-                                    logger.info("Turn complete. Listening continuously.")
+                            if self.ui.require_wake_word:
+                                self.wakeword_active = False
+                                self.ui.set_state("IDLE")
+                                logger.info("Turn complete. Muting mic. Waiting for wake word.")
+                            else:
+                                self.ui.set_state("LISTENING")
+                                logger.info("Turn complete. Listening continuously.")
 
                             if self.vosk_rec:
                                 with self.lock:
@@ -1021,12 +1013,8 @@ class MiaLive:
                         chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.02)
                     except asyncio.TimeoutError:
                         if self._turn_done_event and self._turn_done_event.is_set() and self.audio_in_queue.empty():
-                            # Wait for the hardware buffer to drain before ending speaking
-                            with buf_lock:
-                                buf_empty = len(buffer) == 0
-                            if buf_empty:
-                                self.set_speaking(False)
-                                self._turn_done_event.clear()
+                            self.set_speaking(False)
+                            self._turn_done_event.clear()
                         continue
                     
                     self.set_speaking(True)

@@ -1,21 +1,20 @@
 # config/__init__.py
-import json, os
-from pathlib import Path
-
-from utils.logger import setup_logger
-logger = setup_logger(__name__)
-
-
-_CONFIG_PATH = Path(__file__).parent / "hardware_config.json"
+import os
+import sys
+from utils.config import load_config
 
 def get_config() -> dict:
-    return {}
+    return load_config()
 
 def get_os() -> str:
     """Returns: 'windows' | 'mac' | 'linux'"""
-    # Hardcode linux since user environment is linux, or read from env
-    import os
-    return os.environ.get("OS_SYSTEM", "linux").lower()
+    if os_sys := os.environ.get("OS_SYSTEM"):
+        return os_sys.lower()
+    if os_sys := load_config().get("os_system"):
+        return os_sys.lower()
+    if sys.platform == "darwin":
+        return "mac"
+    return "linux" if sys.platform.startswith("linux") else "windows"
 
 def is_windows() -> bool: return get_os() == "windows"
 def is_mac()     -> bool: return get_os() == "mac"

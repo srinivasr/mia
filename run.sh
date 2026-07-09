@@ -17,7 +17,12 @@ echo "Checking Python environment..."
 if [ ! -d "brain/venv" ]; then
     echo "Creating virtual environment and installing dependencies..."
     cd brain
-    python3 -m venv venv
+    if [ -n "$IN_NIX_SHELL" ]; then
+        # On NixOS, inherit system packages (e.g. tkinter) from the nix shell
+        python3 -m venv --system-site-packages venv
+    else
+        python3 -m venv venv
+    fi
     source venv/bin/activate
     pip install --upgrade pip
     pip install -e .
