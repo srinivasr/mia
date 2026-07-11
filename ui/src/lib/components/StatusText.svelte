@@ -17,9 +17,7 @@
       // Update waveform
       const newHeights = [];
       for (let i = 0; i < 36; i++) {
-        if (state === "Speaking") {
-          newHeights.push(Math.floor(Math.random() * 18) + 3);
-        } else if (state === "Error") {
+        if (state === "Error") {
           newHeights.push(2);
         } else {
           newHeights.push(Math.floor(3 + 2 * Math.sin(tick * 0.09 + i * 0.6)));

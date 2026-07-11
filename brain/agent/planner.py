@@ -206,7 +206,7 @@ def create_plan(goal: str, context: str = "") -> dict:
 
         for step in plan["steps"]:
             if step.get("tool") in ("generated_code",):
-                logger.info(f"generated_code detected in step {step.get('step")} — replacing with web_search")
+                logger.info(f"generated_code detected in step {step.get('step')} — replacing with web_search")
                 desc = step.get("description", goal)
                 step["tool"] = "web_search"
                 step["parameters"] = {"query": desc[:200]}

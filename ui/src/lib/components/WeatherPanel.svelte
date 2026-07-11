@@ -34,11 +34,27 @@
       location = "UNKNOWN";
     }
   });
+
+  function getWeatherEmoji(cond: string): string {
+    const c = cond.toLowerCase();
+    if (c.includes("thunder") || c.includes("storm")) return "⛈";
+    if (c.includes("snow") || c.includes("blizzard")) return "❄️";
+    if (c.includes("rain") || c.includes("drizzle") || c.includes("shower")) return "🌧";
+    if (c.includes("fog") || c.includes("mist") || c.includes("haze")) return "🌫";
+    if (c.includes("cloud") || c.includes("overcast")) return "☁️";
+    if (c.includes("partly") || c.includes("partial")) return "⛅";
+    if (c.includes("clear") || c.includes("sunny") || c.includes("sun")) return "☀️";
+    if (c.includes("wind")) return "🌬";
+    return "🌡";
+  }
+
+  $: weatherEmoji = getWeatherEmoji(condition);
 </script>
 
 <SciFiPanel title="WEATHER">
   <div class="weather-layout">
     <div class="main-temp">
+      <span class="weather-emoji">{weatherEmoji}</span>
       <span class="temp-val">{temperature}</span><span class="temp-unit">°C</span>
     </div>
     <div class="weather-details">
@@ -59,8 +75,15 @@
   .main-temp {
     display: flex;
     align-items: baseline;
+    gap: 12px;
     color: var(--text);
     font-family: 'JetBrains Mono', monospace;
+  }
+  .weather-emoji {
+    font-size: 2.2rem;
+    line-height: 1;
+    align-self: center;
+    text-shadow: 0 0 10px rgba(0, 230, 255, 0.3);
   }
   .temp-val {
     font-size: 2.5rem;
