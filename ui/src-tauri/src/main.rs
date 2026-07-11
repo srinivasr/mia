@@ -78,6 +78,20 @@ fn get_system_stats(sys_state: tauri::State<'_, Mutex<System>>) -> SystemStats {
 }
 
 #[tauri::command]
+fn get_weather() -> Result<String, String> {
+    match std::process::Command::new("curl").args(&["-s", "-H", "User-Agent: curl/7.68.0", "https://wttr.in/?format=j1"]).output() {
+        Ok(output) => {
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+            } else {
+                Err("Failed to fetch weather".to_string())
+            }
+        },
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
 fn open_url(url: String) {
     let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
 }
@@ -91,7 +105,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(System::new_all()))
-        .invoke_handler(tauri::generate_handler![get_system_stats, open_url])
+        .invoke_handler(tauri::generate_handler![get_system_stats, open_url, get_weather])
         .setup(|_app| {
             Ok(())
         })

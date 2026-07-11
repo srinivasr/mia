@@ -7,17 +7,13 @@ import time
 from pathlib import Path
 
 from utils.logger import setup_logger
+from utils.config import base_dir
 logger = setup_logger(__name__)
 
 
-
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR           = get_base_dir()
+BASE_DIR           = base_dir()
 API_CONFIG_PATH    = BASE_DIR / "config" / "hardware_config.json"
+
 DESKTOP            = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
 GEMINI_MODEL       = "gemini-2.5-flash"
@@ -113,7 +109,7 @@ def _take_screenshot() -> Path | None:
         logger.info(f"Screenshot: {screenshot_path}")
         return screenshot_path
     except Exception as e:
-        logger.exception("Operation failed")
+        logger.exception("Screenshot capture failed")
         return None
 
 
@@ -528,9 +524,7 @@ Be specific and actionable. If you see an error message, quote it exactly."""
 
 def code_helper(
     parameters: dict,
-    response=None,
     player=None,
-    session_memory=None,
     speak=None
 ) -> str:
     """

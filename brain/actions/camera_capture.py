@@ -22,36 +22,24 @@ except ImportError:
 import numpy as np
 
 from utils.logger import setup_logger
+from utils.config import base_dir, load_config, get_os as _get_os
 logger = setup_logger(__name__)
 
 IMG_MAX_W = 640
 IMG_MAX_H = 360
 JPEG_QUALITY = 60
 
-def _get_config_path() -> Path:
-    base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
-    return base / "config" / "hardware_config.json"
-
-def _read_config() -> dict:
-    try:
-        return json.loads(_get_config_path().read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+_CONFIG_PATH = base_dir() / "config" / "hardware_config.json"
 
 def _write_config(key: str, value) -> None:
     try:
-        cfg = _read_config()
+        cfg = load_config()
         cfg[key] = value
-        path = _get_config_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(cfg, indent=4), encoding="utf-8")
+        _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _CONFIG_PATH.write_text(json.dumps(cfg, indent=4), encoding="utf-8")
     except Exception as e:
         logger.debug(f"Failed to save config {key}: {e}")
 
-def _get_os() -> str:
-    if os_sys := _read_config().get("os_system"):
-        return os_sys.lower()
-    return "mac" if sys.platform == "darwin" else ("linux" if sys.platform.startswith("linux") else "windows")
 
 def _get_cv2_backend() -> int:
     if not HAS_CV2:
@@ -116,7 +104,7 @@ def start_feed():
 def _capture_loop():
     global _latest_frame
     
-    cfg = _read_config()
+    cfg = load_config()
     idx = int(cfg.get("camera_index", -1))
     if idx < 0:
         idx = _find_camera()

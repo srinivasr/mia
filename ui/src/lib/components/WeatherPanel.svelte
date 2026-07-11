@@ -1,6 +1,7 @@
 <script lang="ts">
   import SciFiPanel from "./SciFiPanel.svelte";
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
 
   let temperature: string = "--";
   let condition: string = "LOADING";
@@ -10,8 +11,8 @@
 
   onMount(async () => {
     try {
-      const res = await fetch("https://wttr.in/?format=j1");
-      const data = await res.json();
+      const res = await invoke("get_weather");
+      const data = JSON.parse(res as string);
       const current = data?.current_condition?.[0];
       if (current) {
         temperature = current.temp_C;

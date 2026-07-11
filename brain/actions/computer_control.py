@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 
 from utils.logger import setup_logger
+from utils.config import base_dir, load_config, get_os as _get_os
 logger = setup_logger(__name__)
 
 _HAS_WTYPE = bool(shutil.which("wtype"))
@@ -31,30 +32,9 @@ try:
 except ImportError:
     _PYPERCLIP = False
 
-def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-_BASE         = _base_dir()
-_CONFIG_PATH  = _BASE / "config" / "hardware_config.json"
-_MEMORY_PATH  = _BASE / "memory" / "long_term.json"
-
-def _load_config() -> dict:
-    try:
-        return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-def _get_os() -> str:
-    if os_sys := _load_config().get("os_system"):
-        return os_sys.lower()
-
-    import sys
-    if sys.platform == "darwin":
-        return "mac"
-    return "linux" if sys.platform.startswith("linux") else "windows"
+_BASE        = base_dir()
+_CONFIG_PATH = _BASE / "config" / "hardware_config.json"
+_MEMORY_PATH = _BASE / "memory" / "long_term.json"
 
 
 def _get_api_key() -> str:
@@ -366,15 +346,13 @@ def _screen_find(description: str) -> tuple[int, int] | None:
             return int(match.group(1)), int(match.group(2))
 
     except Exception as e:
-        logger.exception("Operation failed")
+        logger.exception("screen_find: Gemini API call failed")
 
     return None
 
 def computer_control(
     parameters: dict,
-    response=None,
     player=None,
-    session_memory=None,
 ) -> str:
     """
     Dispatch table for all computer control actions.
