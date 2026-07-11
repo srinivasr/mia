@@ -58,5 +58,10 @@ pkgs.mkShell {
     ])}:$LD_LIBRARY_PATH
     
     echo "MIA Dev Env ready. Run './run.sh' to start."
+
+    if [[ "$PS1" != "" ]]; then
+      export SHELL=$(which zsh)
+      exec zsh
+    fi
   '';
 }

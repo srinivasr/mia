@@ -125,7 +125,7 @@ def _detect_language(text: str) -> str:
     client = _get_client()
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.5-flash",
             contents=(
                 f"What language is this text written in? "
                 f"Reply with ONLY the language name in English (e.g. Turkish, English, French).\n\n"
@@ -378,7 +378,7 @@ class AgentExecutor:
                 "Write a single natural sentence summarizing what was accomplished. "
                 "Address the user as 'sir'. Be direct and positive."
             )
-            response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
             summary  = response.text.strip()
             if speak: speak(summary)
             return summary

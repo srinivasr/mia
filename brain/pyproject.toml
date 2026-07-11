@@ -16,7 +16,7 @@ dependencies = [
     "Pillow>=10.2.0",
     "requests",
     "beautifulsoup4",
-    "duckduckgo-search",
+    "ddgs",
     "playwright",
     "pyautogui",
     "pyperclip",
