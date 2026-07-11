@@ -566,11 +566,13 @@ class MiaLive:
 
     def __init__(self, ui: UIBridge):
         self.ui             = ui
+        self.ui.mia_live    = self
         self.session        = None
         self.audio_in_queue = None
         self.out_queue      = None
         self._loop          = None
         self._is_speaking   = False
+        self._speaking_sources = set()
         self._speaking_lock = threading.Lock()
         self.ui.on_text_command = self._on_text_command
         self._turn_done_event: asyncio.Event | None = None
@@ -608,10 +610,17 @@ class MiaLive:
             self._loop
         )
 
-    def set_speaking(self, value: bool):
+    def set_speaking(self, value: bool, source: str = "main"):
         with self._speaking_lock:
-            self._is_speaking = value
-        if value:
+            if value:
+                self._speaking_sources.add(source)
+            else:
+                self._speaking_sources.discard(source)
+            self._is_speaking = len(self._speaking_sources) > 0
+            
+            currently_speaking = self._is_speaking
+
+        if currently_speaking:
             self.ui.set_state("SPEAKING")
         elif not self.ui.muted:
             self.ui.set_state("IDLE")
@@ -635,7 +644,7 @@ class MiaLive:
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
-        recent_ctx = get_recent_context(limit=15)
+        recent_ctx = get_recent_context(limit=100)
 
         now      = datetime.now()
         time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
@@ -736,6 +745,7 @@ class MiaLive:
                             "player": self.ui, "session_id": self.session_id},
                     daemon=True
                 ).start()
+                result = "SUCCESS: Snapshot taken. The secondary vision AI is now speaking to the user. You MUST abort your turn immediately. Output absolutely NOTHING. Stay silent."
 
             elif name == "computer_settings":
                 result = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, player=self.ui))
@@ -959,11 +969,9 @@ class MiaLive:
 
                             if self.ui.require_wake_word:
                                 self.wakeword_active = False
-                                self.ui.set_state("IDLE")
-                                logger.info("Turn complete. Muting mic. Waiting for wake word.")
+                                logger.info("Turn complete. Audio buffer draining. Next state: Wake word.")
                             else:
-                                self.ui.set_state("LISTENING")
-                                logger.info("Turn complete. Listening continuously.")
+                                logger.info("Turn complete. Audio buffer draining. Next state: Listening.")
 
                             if self.vosk_rec:
                                 with self.lock:
@@ -980,7 +988,8 @@ class MiaLive:
                         )
         except Exception as e:
             logger.info(f"Recv: {e}")
-            traceback.print_exc()
+            if "1008" not in str(e):
+                traceback.print_exc()
             raise
 
     async def _play_audio(self):
@@ -1012,7 +1021,10 @@ class MiaLive:
                     try:
                         chunk = await asyncio.wait_for(self.audio_in_queue.get(), timeout=0.02)
                     except asyncio.TimeoutError:
-                        if self._turn_done_event and self._turn_done_event.is_set() and self.audio_in_queue.empty():
+                        with buf_lock:
+                            buf_empty = len(buffer) == 0
+
+                        if self._turn_done_event and self._turn_done_event.is_set() and self.audio_in_queue.empty() and buf_empty:
                             self.set_speaking(False)
                             self._turn_done_event.clear()
                         continue

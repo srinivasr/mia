@@ -65,7 +65,7 @@ def log_message(session_id: str, role: str, content: str, msg_type: str = "text"
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
 
-def get_recent_context(limit: int = 15) -> str:
+def get_recent_context(limit: int = 100) -> str:
     """
     Retrieves the most recent messages and formats them into a single context string.
     """
