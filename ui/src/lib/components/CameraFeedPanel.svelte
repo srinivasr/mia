@@ -23,6 +23,7 @@
     let height = canvasElement.height = 180;
     
     function draw() {
+      if (!ctx) return;
       ctx.fillStyle = 'rgba(1, 4, 10, 0.2)';
       ctx.fillRect(0, 0, width, height);
       

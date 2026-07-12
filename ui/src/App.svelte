@@ -153,8 +153,10 @@
 
       <div class="center-top">
         <div class="core-brackets">
-          <div class="c-bracket tl"></div><div class="c-bracket tr"></div>
-          <div class="c-bracket bl"></div><div class="c-bracket br"></div>
+          <div class="c-bracket tl"></div>
+          <div class="c-bracket tr"></div>
+          <div class="c-bracket bl"></div>
+          <div class="c-bracket br"></div>
         </div>
         <div class="core-title">M.I.A</div>
       </div>
@@ -165,22 +167,27 @@
 
       <div class="right-panel">
         <CameraFeedPanel />
-        <LogPanel 
-          {messages} 
-          {ws} 
+        <LogPanel
+          {messages}
+          {ws}
           state={$currentState}
           onUserMessage={(text) => {
             const now = new Date().toTimeString().split(" ")[0];
             messages = [...messages, { time: now, sender: "USER", text }];
           }}
         />
-        <ChatPanel on:send={(e) => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "text_command", text: e.detail }));
-            const now = new Date().toTimeString().split(" ")[0];
-            messages = [...messages, { time: now, sender: "USER", text: e.detail }];
-          }
-        }} />
+        <ChatPanel
+          on:send={(e) => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "text_command", text: e.detail }));
+              const now = new Date().toTimeString().split(" ")[0];
+              messages = [
+                ...messages,
+                { time: now, sender: "USER", text: e.detail },
+              ];
+            }
+          }}
+        />
       </div>
     </div>
   {:else if $isConnected}
@@ -281,7 +288,6 @@
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
   }
 
-
   .core-brackets {
     position: absolute;
     width: 140%;
@@ -290,18 +296,37 @@
     left: -20%;
     pointer-events: none;
   }
-  
+
   .c-bracket {
     position: absolute;
-    width: 12px; height: 12px;
+    width: 12px;
+    height: 12px;
     border: 1px solid var(--text-dim);
   }
-  .c-bracket.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
-  .c-bracket.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
-  .c-bracket.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
-  .c-bracket.br { bottom: 0; right: 0; border-left: none; border-top: none; }
-
-
+  .c-bracket.tl {
+    top: 0;
+    left: 0;
+    border-right: none;
+    border-bottom: none;
+  }
+  .c-bracket.tr {
+    top: 0;
+    right: 0;
+    border-left: none;
+    border-bottom: none;
+  }
+  .c-bracket.bl {
+    bottom: 0;
+    left: 0;
+    border-right: none;
+    border-top: none;
+  }
+  .c-bracket.br {
+    bottom: 0;
+    right: 0;
+    border-left: none;
+    border-top: none;
+  }
 
   .right-panel {
     display: flex;
@@ -315,18 +340,36 @@
   }
 
   @keyframes bootSlideLeft {
-    0% { transform: translateX(-60px); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
+    0% {
+      transform: translateX(-60px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
   @keyframes bootSlideRight {
-    0% { transform: translateX(60px); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
+    0% {
+      transform: translateX(60px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
   @keyframes bootFadeUp {
-    0% { transform: translate(-50%, 30px); opacity: 0; }
-    100% { transform: translate(-50%, 0); opacity: 1; }
+    0% {
+      transform: translate(-50%, 30px);
+      opacity: 0;
+    }
+    100% {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
   }
 
   :global(.right-panel > .scifi-panel) {

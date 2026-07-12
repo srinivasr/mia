@@ -378,7 +378,7 @@
         const dispAttr = particleSystem.geometry.getAttribute("aDisplace") as THREE.BufferAttribute;
         const cr2 = CURSOR_RADIUS * CURSOR_RADIUS;
 
-        const targetChaos = $currentState === "Initializing" ? 1.0 : 0.0;
+        const targetChaos = ($currentState as string) === "Initializing" ? 1.0 : 0.0;
         currentChaos += (targetChaos - currentChaos) * 0.05;
 
         for (let i = 0; i < PARTICLE_COUNT; i++) {
