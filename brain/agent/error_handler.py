@@ -96,7 +96,7 @@ def analyze_error(
     client = _get_client()
 
     if attempt >= max_attempts:
-        logger.info(f"Max attempts reached for step {step.get('step")} — forcing replan")
+        logger.info("Max attempts reached for step %s — forcing replan", step.get('step'))
         return {
             "decision":      ErrorDecision.REPLAN,
             "reason":        f"Failed {attempt} times: {error[:100]}",
@@ -118,7 +118,7 @@ Attempt number: {attempt}"""
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=ERROR_ANALYST_PROMPT
@@ -142,7 +142,7 @@ Attempt number: {attempt}"""
             result["decision"]     = ErrorDecision.REPLAN
             result["user_message"] = "This step is critical — finding alternative approach."
 
-        logger.info(f"Decision: {result['decision'].value} — {result.get('reason', '")}")
+        logger.info("Decision: %s — %s", result['decision'].value, result.get('reason', ''))
         return result
 
     except Exception as e:

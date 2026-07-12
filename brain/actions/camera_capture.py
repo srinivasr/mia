@@ -135,7 +135,7 @@ def _capture_loop():
             # AI frame (downscaled)
             if HAS_PIL:
                 img = PIL.Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                img.thumbnail((IMG_MAX_W, IMG_MAX_H), PIL.Image.BILINEAR)
+                img.thumbnail((IMG_MAX_W, IMG_MAX_H), PIL.Image.Resampling.BILINEAR)
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=JPEG_QUALITY)
                 ai_bytes = buf.getvalue()

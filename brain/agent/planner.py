@@ -28,6 +28,7 @@ ABSOLUTE RULES:
 - Use web_search for ANY information retrieval, research, or current data.
 - Use file_controller to save content to disk.
 - Max 5 steps. Use the minimum steps needed.
+- If saving search results to a file, leave the `content` parameter EMPTY (""). The system will auto-inject it.
 
 AVAILABLE TOOLS AND THEIR PARAMETERS:
 
@@ -122,7 +123,7 @@ Steps:
 
 web_search | query: "mechanical engineering overview definition history"
 web_search | query: "mechanical engineering applications and future trends"
-file_controller | action: write, path: desktop, name: mechanical_engineering.txt, content: "MECHANICAL ENGINEERING RESEARCH\n\nThis file will be filled with web research results."
+file_controller | action: write, path: desktop, name: mechanical_engineering.txt, content: ""
 
 Goal: "What is the price of Bitcoin"
 Steps:
@@ -192,7 +193,7 @@ def create_plan(goal: str, context: str = "") -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.5-flash",
             contents=user_input,
             config={"system_instruction": PLANNER_PROMPT}
         )

@@ -144,6 +144,7 @@ class _VisionSession:
     async def _session_loop(self) -> None:
         self._out_queue = asyncio.Queue(maxsize=30)
         self._audio_in  = asyncio.Queue()
+        self._turn_done_evt = asyncio.Event()
 
         client = genai.Client(
             api_key=_get_api_key(),
@@ -226,6 +227,8 @@ class _VisionSession:
                         transcript.append(chunk)
 
                 if sc.turn_complete:
+                    if hasattr(self, "_turn_done_evt"):
+                        self._turn_done_evt.set()
                     if transcript and self._player:
                         full = re.sub(r"\s+", " ", " ".join(transcript)).strip()
                         if full:
@@ -267,12 +270,33 @@ class _VisionSession:
                 callback=audio_cb
             ) as stream:
                 while True:
-                    chunk = await self._audio_in.get()
+                    if self._audio_in is None:
+                        await asyncio.sleep(0.1)
+                        continue
+
+                    try:
+                        chunk = await asyncio.wait_for(self._audio_in.get(), timeout=0.02)
+                    except asyncio.TimeoutError:
+                        with buf_lock:
+                            buf_empty = len(buffer) == 0
+
+                        if hasattr(self, "_turn_done_evt") and self._turn_done_evt.is_set() and self._audio_in.empty() and buf_empty:
+                            if hasattr(self._player, "mia_live"):
+                                self._player.mia_live.set_speaking(False, source="vision")
+                            self._turn_done_evt.clear()
+                        continue
+                    
+                    if hasattr(self._player, "mia_live"):
+                        self._player.mia_live.set_speaking(True, source="vision")
+
                     with buf_lock:
                         buffer.extend(chunk)
         except Exception as e:
             logger.exception("Failed while reading stream chunks from Gemini")
             raise
+        finally:
+            if hasattr(self._player, "mia_live"):
+                self._player.mia_live.set_speaking(False, source="vision")
 
 _session      = _VisionSession()
 _session_lock = threading.Lock()
