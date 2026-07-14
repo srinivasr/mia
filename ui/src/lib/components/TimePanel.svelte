@@ -5,29 +5,43 @@
   let timeString = "";
   let dateString = "";
   let timeZone = "";
+  let userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   let interval: ReturnType<typeof setInterval>;
+
+  async function fetchTimeZone() {
+    try {
+      const res = await fetch("http://ip-api.com/json/");
+      const data = await res.json();
+      if (data.timezone) {
+        userTimeZone = data.timezone;
+        updateTime();
+      }
+    } catch (e) {
+      console.warn("Failed to fetch timezone via IP, falling back to system TZ", e);
+    }
+  }
 
   function updateTime() {
     const now = new Date();
-    let hours = now.getHours();
-    const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const timeOpts: Intl.DateTimeFormatOptions = { timeZone: userTimeZone, hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true };
+    const dateOpts: Intl.DateTimeFormatOptions = { timeZone: userTimeZone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
     
-    hours = hours % 12;
-    hours = hours ? hours : 12;
+    let timeStrRaw = new Intl.DateTimeFormat('en-US', timeOpts).format(now);
+    const match = timeStrRaw.match(/^(\d{1,2}:\d{2}):(\d{2})\s*(AM|PM)$/i);
     
-    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
-    const secondsStr = seconds < 10 ? '0' + seconds : seconds;
+    if (match) {
+       const [_, hm, s, ap] = match;
+       timeString = `${hm}<span class="sec">:${s}</span> <span class="ampm">${ap.toUpperCase()}</span>`;
+    } else {
+       timeString = timeStrRaw;
+    }
     
-    timeString = `${hours}:${minutesStr}<span class="sec">:${secondsStr}</span> <span class="ampm">${ampm}</span>`;
-    
-    dateString = now.toDateString().toUpperCase();
-    
-    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone.toUpperCase();
+    dateString = new Intl.DateTimeFormat('en-US', dateOpts).format(now).replace(/,/g, '').toUpperCase();
+    timeZone = userTimeZone.toUpperCase();
   }
 
   onMount(() => {
+    fetchTimeZone();
     updateTime();
     interval = setInterval(updateTime, 1000);
   });

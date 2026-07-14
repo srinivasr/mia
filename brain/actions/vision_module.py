@@ -124,14 +124,17 @@ class _VisionSession:
             raise RuntimeError(f"Vision session did not connect within {timeout}s.")
         logger.debug("Vision session ready")
 
-    def analyze(self, image_bytes: bytes, mime_type: str, user_text: str, session_id: str = None) -> None:
+    def analyze(self, image_bytes: bytes, mime_type: str, user_text: str, session_id: str = None) -> threading.Event:
+        done_evt = threading.Event()
         if not self._loop or not self._out_queue:
             logger.info(f"Session not started — dropping request")
-            return
+            done_evt.set()
+            return done_evt
         asyncio.run_coroutine_threadsafe(
-            self._out_queue.put((image_bytes, mime_type, user_text, session_id)),
+            self._out_queue.put((image_bytes, mime_type, user_text, session_id, done_evt)),
             self._loop,
         )
+        return done_evt
 
     def is_ready(self) -> bool:
         return self._session is not None
@@ -194,8 +197,9 @@ class _VisionSession:
 
     async def _send_loop(self) -> None:
         while True:
-            image_bytes, mime_type, user_text, session_id = await self._out_queue.get()
+            image_bytes, mime_type, user_text, session_id, done_evt = await self._out_queue.get()
             self._current_session_id = session_id
+            self._current_done_evt = done_evt
             if not self._session:
                 logger.info(f"No session — dropping image")
                 continue
@@ -284,6 +288,9 @@ class _VisionSession:
                             if hasattr(self._player, "mia_live"):
                                 self._player.mia_live.set_speaking(False, source="vision")
                             self._turn_done_evt.clear()
+                            if hasattr(self, "_current_done_evt") and self._current_done_evt:
+                                self._current_done_evt.set()
+                                self._current_done_evt = None
                         continue
                     
                     if hasattr(self._player, "mia_live"):
@@ -349,8 +356,11 @@ def screen_process(
         logger.exception("Failed to capture or encode screenshot")
         return False
 
-    _session.analyze(image_bytes, mime_type, user_text, session_id)
-    return True
+    done_evt = _session.analyze(image_bytes, mime_type, user_text, session_id)
+    if done_evt:
+        done_evt.wait()
+        
+    return "SUCCESS: Secondary AI analyzed the screen and already answered the user. DO NOT output any text or audio. Simply return."
 
 
 def warmup_session(player=None) -> None:

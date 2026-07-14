@@ -739,13 +739,10 @@ class MiaLive:
                 result = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, player=self.ui))
 
             elif name == "screen_process":
-                threading.Thread(
-                    target=screen_process,
-                    kwargs={"parameters": args,
-                            "player": self.ui, "session_id": self.session_id},
-                    daemon=True
-                ).start()
-                result = "SUCCESS: Snapshot taken. The secondary vision AI is now speaking to the user. You MUST abort your turn immediately. Output absolutely NOTHING. Stay silent."
+                result = await loop.run_in_executor(
+                    None, 
+                    lambda: screen_process(parameters=args, player=self.ui, session_id=self.session_id)
+                )
 
             elif name == "computer_settings":
                 result = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, player=self.ui))
