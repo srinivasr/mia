@@ -1,21 +1,41 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  let dots = '';
+  let displayText = '';
+  const textToType = 'MIA KHAL';
 
   onMount(() => {
-    const interval = setInterval(() => {
-      dots = dots.length >= 3 ? '' : dots + '.';
-    }, 500);
-    return () => clearInterval(interval);
+    let mounted = true;
+    
+    async function typeWriter() {
+      await new Promise(r => setTimeout(r, 400));
+      
+      for (let i = 0; i < textToType.length; i++) {
+        if (!mounted) return;
+        displayText += textToType[i];
+        await new Promise(r => setTimeout(r, 60 + Math.random() * 80));
+      }
+      
+      if (!mounted) return;
+      await new Promise(r => setTimeout(r, 1000));
+      
+      for (let i = 0; i < 5; i++) {
+        if (!mounted) return;
+        displayText = displayText.slice(0, -1);
+        await new Promise(r => setTimeout(r, 30 + Math.random() * 20));
+      }
+    }
+    
+    typeWriter();
+    return () => { mounted = false; };
   });
 </script>
 
 <div class="loading-screen">
   <div class="loader-content">
-    <div class="orb-pulse"></div>
-    <h1>INITIALIZING MIA{dots}</h1>
-    <p>Establishing secure connection...</p>
+    <h1>
+      {displayText}<span class="cursor"></span>
+    </h1>
   </div>
 </div>
 
@@ -35,32 +55,33 @@
     color: var(--pri, #4ae5ff);
   }
 
-  .orb-pulse {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 24px;
-    border-radius: 50%;
-    background: radial-gradient(circle, var(--pri-gho, rgba(74, 229, 255, 0.3)) 0%, transparent 70%);
-    animation: pulse 1.5s ease-in-out infinite;
-    box-shadow: 0 0 60px var(--pri-gho, rgba(74, 229, 255, 0.2));
-  }
 
-  @keyframes pulse {
-    0%, 100% { transform: scale(0.8); opacity: 0.6; }
-    50% { transform: scale(1.2); opacity: 1; }
-  }
 
   h1 {
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: 300;
     letter-spacing: 0.3em;
     margin-bottom: 8px;
     font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
   }
 
-  p {
-    font-size: 0.85rem;
-    opacity: 0.5;
-    font-family: 'Courier New', monospace;
+  .cursor {
+    display: inline-block;
+    width: 0.5em;
+    height: 1.2em;
+    background-color: currentColor;
+    margin-left: 4px;
+    animation: blink 1s step-end infinite;
   }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+
 </style>

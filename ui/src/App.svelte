@@ -5,7 +5,6 @@
   import FileDropZone from "./lib/components/FileDropZone.svelte";
   import StatusText from "./lib/components/StatusText.svelte";
   import SetupScreen from "./lib/components/SetupScreen.svelte";
-  import LoadingScreen from "./lib/components/LoadingScreen.svelte";
   import TimePanel from "./lib/components/TimePanel.svelte";
   import WeatherPanel from "./lib/components/WeatherPanel.svelte";
   import CameraFeedPanel from "./lib/components/CameraFeedPanel.svelte";
@@ -193,7 +192,9 @@
   {:else if $isConnected}
     <SetupScreen {ws} />
   {:else}
-    <LoadingScreen />
+    <div class="init-screen">
+      <p>WAITING FOR CORE SYSTEM...</p>
+    </div>
   {/if}
 
   {#if $flashOverlay}
@@ -378,6 +379,19 @@
 
   :global(.right-panel > .scifi-panel:last-child) {
     margin-bottom: 0;
+  }
+
+  .init-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--txt, #c0c0d0);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    z-index: 9999;
   }
 
   .flash-overlay {

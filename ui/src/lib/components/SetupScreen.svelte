@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
+  import LoadingScreen from "./LoadingScreen.svelte";
   import {
     setupStep,
     apiKey,
@@ -298,20 +299,7 @@
         {/if}
       </div>
     {:else if $setupStep === "launching"}
-      <div class="step launching-step">
-        <div class="launch-orb"></div>
-        <div class="status-lines">
-          {#if launchLine >= 1}
-            <p class="status-line">&gt; ESTABLISHING LINK...</p>
-          {/if}
-          {#if launchLine >= 2}
-            <p class="status-line">&gt; CALIBRATING...</p>
-          {/if}
-          {#if launchLine >= 3}
-            <p class="status-line online">&gt; MIA IS ONLINE</p>
-          {/if}
-        </div>
-      </div>
+      <LoadingScreen />
     {/if}
   </div>
 </div>
@@ -632,52 +620,5 @@
     padding: 12px 48px;
   }
 
-  .launching-step {
-    text-align: center;
-    padding: 60px 0;
-  }
 
-  .launch-orb {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 32px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle,
-      var(--pri-gho, rgba(74, 229, 255, 0.3)) 0%,
-      transparent 70%
-    );
-    animation: pulse 1.5s ease-in-out infinite;
-    box-shadow: 0 0 60px var(--pri-gho, rgba(74, 229, 255, 0.2));
-  }
-
-  .status-lines {
-    text-align: left;
-    max-width: 260px;
-    margin: 0 auto;
-  }
-
-  .status-line {
-    font-family: "Courier New", monospace;
-    font-size: 0.85rem;
-    color: var(--muted-c, #666);
-    margin: 8px 0;
-    opacity: 0;
-    animation: lineFadeIn 0.5s ease forwards;
-  }
-
-  .status-line.online {
-    color: var(--green, #4ade80) !important;
-  }
-
-  @keyframes lineFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
 </style>
